@@ -82,4 +82,4 @@ If you discover a security vulnerability, please email the maintainers directly 
 
 ## License
 
-By contributing to this project, you agree that your contributions will be licensed under the MIT License.
+By contributing to this project, you agree that your contributions will be licensed under the Apache License 2.0.
