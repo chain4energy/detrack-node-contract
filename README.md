@@ -1,5 +1,8 @@
 # DeTrack Smart Contract (CosmWASM)
 
+[![CI/CD](https://github.com/chain4energy/detrack-node-contract/actions/workflows/ci.yml/badge.svg)](https://github.com/chain4energy/detrack-node-contract/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 This is a CosmWASM smart contract for the DeTrack project on the c4e chain. It provides functionality for storing and verifying cryptographic proofs of energy data.
 
 ## Overview
@@ -273,3 +276,22 @@ The contract implements role-based access control:
 - Only whitelisted nodes can store proofs and perform node operations
 - Nodes must maintain a reputation score above the minimum threshold
 - Only the admin can whitelist/remove nodes and update reputation scores
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+For support and questions:
+- Open an issue on [GitHub Issues](https://github.com/chain4energy/detrack-node-contract/issues)
+- Visit the [Chain4Energy organization](https://github.com/chain4energy)
+
+## Related Projects
+
+- [DeTrack Worker Node](https://github.com/chain4energy/detrack-worker-node) - Node implementation for the DeTrack network
+- [DID Contract](https://github.com/chain4energy/did-contract) - Decentralized Identity contract for c4e chain
