@@ -26,7 +26,8 @@ echo -e "${YELLOW}Sending funds from $ALICE to $DETRACK1_NODE...${NC}"
 
 # Use c4e-chain CLI to send funds
 # Adjust the path to your specific c4e-chain CLI location
-C4E_BIN="${HOME_DIR}/bin/c4ed"
+# C4E_BIN="${HOME_DIR}/bin/c4ed"
+C4E_BIN=c4ed
 
 # Send 100000000uc4e (100 C4E) tokens from alice to the DeTrack wallet
 TX_RESULT=$(${C4E_BIN} tx bank send $ALICE_NAME $DETRACK1_NODE 100000000uc4e \
