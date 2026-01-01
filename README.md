@@ -6,11 +6,31 @@ This is a CosmWASM smart contract for the DeTrack project on the c4e chain. It p
 
 ## Overview
 
-The DeTrack smart contract allows:
+The DeTrack smart contract implements a decentralized node management and proof verification system for energy data on the Chain4Energy blockchain.
+
+**Current Version:** Phase 1a  
+**Target Version:** Phase 1b (DID-First Architecture - Variant C)  
+**Status:** Roadmap planning phase
+
+### Phase 1a (Current Implementation)
+
+The contract currently allows:
 1. Storing cryptographic proofs of energy data on the blockchain
 2. Verifying the existence of proofs by data hash
-3. Managing users and their associated proofs
+3. Managing nodes with tiered staking requirements
 4. Querying proofs by various parameters
+5. Admin-controlled whitelist system
+
+### Phase 1b (Target - Variant C)
+
+The planned upgrade will introduce:
+- ✅ **DID-Based Trust Chain:** W3C-compliant DID verification (Gateway → Worker → Blockchain)
+- ✅ **Multi-Batch Aggregation:** 8+ batches per proof (99.94% cost reduction)
+- ✅ **Secondary Indexes:** Efficient queries by worker_did and gateway_did
+- ✅ **Gas Optimization:** Remove redundant fields (~210 gas savings per proof)
+- ✅ **Future-Proof:** Ready for Device DID (Phase 3) and NFT ownership (Phase 4)
+
+📜 **See the complete roadmap:** [docs/detrack-node-contract-roadmap.md](./docs/detrack-node-contract-roadmap.md)
 
 ## Contract Structure
 
@@ -22,6 +42,8 @@ The DeTrack smart contract allows:
 - `src/state.rs` - State management
 
 ## Message Types
+
+**Note:** The message types below represent the **Phase 1a (current)** implementation. For the **Phase 1b (target)** architecture with DID integration and multi-batch aggregation, see the [Migration Roadmap](./docs/detrack-node-contract-roadmap.md).
 
 ### InstantiateMsg
 ```rust
@@ -273,6 +295,28 @@ const result = await signingClient.execute(
 
 The contract implements role-based access control:
 - Only whitelisted nodes can store proofs and perform node operations
+- Admin operations require the admin address
+- Nodes must meet tiered staking requirements
+
+## Documentation
+
+### Current Implementation (Phase 1a)
+- [API Specification](./docs/api-specification.md) - Complete API reference
+- [Contract Design](./docs/contract-design.md) - Design overview
+- [Deployment Guide](./docs/deployment-guide.md) - Deployment instructions
+
+### Roadmap to Phase 1b
+- [Migration Roadmap](./docs/detrack-node-contract-roadmap.md) - **Complete roadmap to Variant C (DID-First Architecture)**
+
+### Related Documentation
+- [DeTrack Worker Node](../detrack-worker-node/README.md) - Worker Node implementation
+- [STORE-PROOF-ANALYSIS](../detrack-worker-node/docs/STORE-PROOF-ANALYSIS.md) - Variant C architecture analysis
+- [ADR-003: Remove Aggregation Fields](../detrack-worker-node/docs/ADR/ADR-003-remove-aggregation-fields.md)
+- [ADR-004: DID Integration](../detrack-worker-node/docs/ADR/ADR-004-did-integration.md)
+
+## License
+
+Apache-2.0
 - Nodes must maintain a reputation score above the minimum threshold
 - Only the admin can whitelist/remove nodes and update reputation scores
 
