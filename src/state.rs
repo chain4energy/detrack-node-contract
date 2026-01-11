@@ -1,6 +1,7 @@
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Timestamp, Uint128};
-use cw_storage_plus::{Item, Map};
+use cw_storage_plus::{Item, Map, IndexedMap, MultiIndex, Index, IndexList};
+use crate::msg::BatchInfo;
 
 #[cw_serde]
 pub struct Config {
@@ -13,7 +14,9 @@ pub struct Config {
     /// The minimum reputation a node must have to perform certain actions (e.g., store proofs).
     pub min_reputation_threshold: i32,
     /// The address of the treasury contract/wallet where slashed funds or fees might be sent.
-    pub treasury: Option<Addr>, // Changed from treasury_address
+    pub treasury: Option<Addr>,
+    /// The address of the DID Contract for identity verification
+    pub did_contract_address: Addr,
     /// Minimum native stake required for a node to qualify for Tier 1.
     pub min_stake_tier1: Uint128,
     /// Minimum native stake required for a node to qualify for Tier 2.
@@ -37,28 +40,22 @@ pub struct Config {
 pub struct Proof {
     /// Unique identifier for the proof.
     pub id: u64,
-    /// The hash of the off-chain data, serving as the core content of the proof.
+    /// W3C DID of the Worker Node that stored this proof
+    pub worker_did: String,
+    /// The hash of the blockchain Merkle root (aggregates all batches)
     pub data_hash: String,
-    /// An optional reference (e.g., IPFS CID, URL) to the original data.
-    pub original_data_reference: Option<String>,
-    /// Optional address of the entity that owns or submitted the original data.
-    pub data_owner: Option<String>, 
+    /// Start of time window (nanosecond timestamp as string)
+    pub tw_start: String,
+    /// End of time window (nanosecond timestamp as string)
+    pub tw_end: String,
+    /// Array of batch metadata (multi-batch aggregation)
+    pub batch_metadata: Vec<BatchInfo>,
     /// Optional JSON string for additional, application-specific metadata related to the proof.
     pub metadata_json: Option<String>,
     /// Timestamp of when the proof was stored in the contract.
-    pub stored_at: Timestamp, // Renamed from verified_at
+    pub stored_at: Timestamp,
     /// Address of the node that stored this proof.
     pub stored_by: Addr,
-    /// Start of the time window of measurement which the proof pertains to.
-    pub tw_start: Timestamp,
-    /// End of the time window of measurement which the proof pertains to.
-    pub tw_end: Timestamp,
-    /// Amount of energy/data produced or input value.
-    pub value_in: Option<Uint128>,
-    /// Amount of energy/data consumed or output value.
-    pub value_out: Option<Uint128>,
-    /// Unit for value_in/value_out (e.g., kWh, MWh).
-    pub unit: String,
 }
 
 #[cw_serde]
@@ -103,11 +100,45 @@ pub struct UnlockingDeposit {
     pub release_at_block: u64,
 }
 
+// ============================================================================
+// Storage Structures
+// ============================================================================
+
 /// Stores the global configuration of the contract.
 pub const CONFIG: Item<Config> = Item::new("config");
 
-/// Stores individual data proofs, keyed by a unique sequential ID (u64).
-pub const PROOFS: Map<u64, Proof> = Map::new("proofs");
+/// Phase 1b: IndexedMap with secondary indexes for efficient querying
+/// ProofIndexes enables querying proofs by worker_did
+pub struct ProofIndexes<'a> {
+    /// Index by worker_did for efficient Worker Node queries
+    pub worker: MultiIndex<'a, String, Proof, u64>,
+}
+
+impl<'a> IndexList<Proof> for ProofIndexes<'a> {
+    fn get_indexes(&'_ self) -> Box<dyn Iterator<Item = &'_ dyn Index<Proof>> + '_> {
+        let v: Vec<&dyn Index<Proof>> = vec![&self.worker];
+        Box::new(v.into_iter())
+    }
+}
+
+/// Stores individual data proofs with secondary indexes
+/// Primary key: u64 (proof ID)
+/// Secondary index: worker_did (String)
+pub fn proofs<'a>() -> IndexedMap<'a, u64, Proof, ProofIndexes<'a>> {
+    let indexes = ProofIndexes {
+        worker: MultiIndex::new(
+            |_pk, d| d.worker_did.clone(),
+            "proofs",
+            "proofs__worker"
+        ),
+    };
+    IndexedMap::new("proofs", indexes)
+}
+
+/// Manual index for gateway_did (since multiple batches can have different gateways)
+/// Key: (gateway_did, proof_id)
+/// Value: () - just for membership checking
+pub const GATEWAY_PROOFS: Map<(&str, u64), ()> = Map::new("gateway_proofs");
 
 /// Provides an index to look up a proof ID (u64) by its data hash (String).
 /// This allows for quick checks of proof existence and retrieval by content hash.

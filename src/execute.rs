@@ -1,7 +1,8 @@
 use crate::error::ContractError;
-use crate::state::{Node, CONFIG, WHITELISTED_NODES, UNLOCKING_DEPOSITS, UnlockingDeposit, PROOFS, PROOF_BY_HASH, Proof, USERS, User};
+use crate::state::{Node, CONFIG, WHITELISTED_NODES, UNLOCKING_DEPOSITS, UnlockingDeposit, proofs, GATEWAY_PROOFS, PROOF_BY_HASH, Proof, USERS, User};
+use crate::msg::BatchInfo;
 use crate::helpers::get_native_staked_amount; // Added import
-use cosmwasm_std::{BankMsg, Event, Coin, Uint128, DepsMut, Env, MessageInfo, Response, Timestamp};
+use cosmwasm_std::{BankMsg, Event, Coin, Uint128, DepsMut, Env, MessageInfo, Response};
 
 /// ADMIN OPERATIONS
 

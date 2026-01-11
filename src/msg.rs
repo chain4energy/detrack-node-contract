@@ -1,11 +1,29 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Timestamp, Uint128};
 
+/// BatchInfo - Information about a single batch aggregated into a proof
+/// Phase 1b: Multi-batch aggregation support
+#[cw_serde]
+pub struct BatchInfo {
+    /// Unique batch identifier (UUID or gateway-generated)
+    pub batch_id: String,
+    /// W3C DID of gateway that submitted this batch
+    pub gateway_did: String,
+    /// Number of devices in this batch
+    pub device_count: u32,
+    /// Total snapshots aggregated in this batch
+    pub snapshot_count: u32,
+    /// SHA-256 Merkle root of this batch
+    pub batch_merkle_root: String,
+}
+
 /// Message type for `instantiate` entry_point
 #[cw_serde]
 pub struct InstantiateMsg {
     pub admin: Option<String>,
     pub version: String,
+    /// DID Contract address for identity verification
+    pub did_contract_address: String,
     // Add tier and deposit parameters from previous discussion
     pub min_stake_tier1: Uint128,
     pub min_stake_tier2: Uint128,
@@ -45,17 +63,20 @@ pub enum AdminExecuteMsg {
 /// Message type for node operations
 #[cw_serde]
 pub enum NodeExecuteMsg {
-    /// Store a new proof on the blockchain
+    /// Store a new proof on the blockchain (Phase 1b: Multi-batch aggregation)
     StoreProof {
+        /// W3C DID of the Worker Node storing this proof
+        worker_did: String,
+        /// SHA-256 hash of the blockchain Merkle root (aggregates all batches)
         data_hash: String,
-        original_data_reference: Option<String>,
-        data_owner: Option<String>,
+        /// Start of time window (nanosecond timestamp as string)
+        tw_start: String,
+        /// End of time window (nanosecond timestamp as string)
+        tw_end: String,
+        /// Array of batch metadata (one entry per gateway batch)
+        batch_metadata: Vec<BatchInfo>,
+        /// Optional JSON metadata for additional information
         metadata_json: Option<String>,
-        tw_start: Timestamp, // Added
-        tw_end: Timestamp,   // Added
-        value_in: Option<Uint128>, // Added
-        value_out: Option<Uint128>, // Added
-        unit: String,        // Added
     },
     /// Register a new node
     RegisterNode {},
@@ -116,6 +137,20 @@ pub enum QueryMsg {
     /// Returns node information including whitelisted status and reputation
     #[returns(NodeInfoResponse)]
     NodeInfo { address: String },
+    /// Returns proofs submitted by a specific Worker Node DID
+    #[returns(ProofsResponse)]
+    ProofsByWorker { 
+        worker_did: String, 
+        start_after: Option<u64>, 
+        limit: Option<u32> 
+    },
+    /// Returns proofs that include batches from a specific Gateway DID
+    #[returns(ProofsResponse)]
+    ProofsByGateway { 
+        gateway_did: String, 
+        start_after: Option<u64>, 
+        limit: Option<u32> 
+    },
 }
 
 // Query Responses
@@ -126,6 +161,7 @@ pub struct ConfigResponse {
     pub proof_count: u64,
     pub min_reputation_threshold: i32,
     pub treasury: Option<String>,
+    pub did_contract_address: String,
     // Add fields from InstantiateMsg
     pub min_stake_tier1: Uint128,
     pub min_stake_tier2: Uint128,
@@ -140,17 +176,22 @@ pub struct ConfigResponse {
 #[cw_serde]
 pub struct ProofResponse {
     pub id: u64,
+    /// W3C DID of the Worker Node that stored this proof
+    pub worker_did: String,
+    /// SHA-256 hash of the blockchain Merkle root
     pub data_hash: String,
-    pub original_data_reference: Option<String>,
-    pub data_owner: Option<String>,
+    /// Start of time window (nanosecond timestamp as string)
+    pub tw_start: String,
+    /// End of time window (nanosecond timestamp as string)
+    pub tw_end: String,
+    /// Array of batch metadata (multi-batch aggregation)
+    pub batch_metadata: Vec<BatchInfo>,
+    /// Optional JSON metadata
     pub metadata_json: Option<String>,
-    pub stored_at: Timestamp, // Renamed from verified_at
+    /// Blockchain timestamp when proof was stored
+    pub stored_at: Timestamp,
+    /// Address of the node that stored this proof
     pub stored_by: String,
-    pub tw_start: Timestamp, // Added
-    pub tw_end: Timestamp,   // Added
-    pub value_in: Option<Uint128>, // Added
-    pub value_out: Option<Uint128>, // Added
-    pub unit: String,        // Added
 }
 
 #[cw_serde]

@@ -37,6 +37,7 @@ pub fn instantiate(
         proof_count: 0,
         min_reputation_threshold: 0, // Default minimum reputation threshold
         treasury: None, // Initialize treasury as None
+        did_contract_address: deps.api.addr_validate(&msg.did_contract_address)?,
         // Initialize new config fields from InstantiateMsg
         min_stake_tier1: msg.min_stake_tier1,
         min_stake_tier2: msg.min_stake_tier2,
@@ -84,28 +85,22 @@ pub fn execute(
         },
         ExecuteMsg::Node(node_msg) => match node_msg {
             NodeExecuteMsg::StoreProof { 
+                worker_did,
                 data_hash, 
-                original_data_reference, 
-                data_owner, 
-                metadata_json,
                 tw_start,
                 tw_end,
-                value_in,
-                value_out,
-                unit,
+                batch_metadata,
+                metadata_json,
             } => store_proof(
                 deps, 
                 env, 
                 info, 
+                worker_did,
                 data_hash, 
-                original_data_reference, 
-                data_owner, 
-                metadata_json,
                 tw_start,
                 tw_end,
-                value_in,
-                value_out,
-                unit,
+                batch_metadata,
+                metadata_json,
             ),
             NodeExecuteMsg::RegisterNode {} => register_node(deps, env, info),
             NodeExecuteMsg::AddDeposit {} => add_deposit(deps, env, info), // Added
