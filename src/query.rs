@@ -1,8 +1,8 @@
 use cosmwasm_std::{Deps, StdResult, Order, Uint128};
 use cw_storage_plus::Bound;
 
-use crate::msg::{ConfigResponse, NodeInfoResponse, ProofResponse, ProofsResponse, UserResponse, WhitelistedResponse, NodeReputationResponse};
-use crate::state::{CONFIG, WHITELISTED_NODES, PROOFS, USERS, UNLOCKING_DEPOSITS, PROOF_BY_HASH}; // Added PROOF_BY_HASH
+use crate::msg::{ConfigResponse, NodeInfoResponse, ProofResponse, ProofsResponse, WhitelistedResponse, NodeReputationResponse};
+use crate::state::{CONFIG, WHITELISTED_NODES, proofs, GATEWAY_PROOFS, UNLOCKING_DEPOSITS, PROOF_BY_HASH};
 use crate::helpers::get_native_staked_amount;
 
 const DEFAULT_LIMIT: u32 = 10;
@@ -10,7 +10,7 @@ const MAX_LIMIT: u32 = 30;
 
 /// Query contract config.
 /// Returns the current configuration of the smart contract, including admin, version,
-/// proof count, reputation threshold, and treasury address.
+/// proof count, reputation threshold, treasury address, and DID contract address.
 pub fn config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     
@@ -20,6 +20,7 @@ pub fn config(deps: Deps) -> StdResult<ConfigResponse> {
         proof_count: config.proof_count,
         min_reputation_threshold: config.min_reputation_threshold,
         treasury: config.treasury.map(|addr| addr.to_string()),
+        did_contract_address: config.did_contract_address.to_string(),
         min_stake_tier1: config.min_stake_tier1,
         min_stake_tier2: config.min_stake_tier2,
         min_stake_tier3: config.min_stake_tier3,
@@ -31,24 +32,21 @@ pub fn config(deps: Deps) -> StdResult<ConfigResponse> {
     })
 }
 
-/// Query proof by ID.
+/// Query proof by ID (Phase 1b).
 /// Returns detailed information about a specific proof, identified by its unique ID.
 pub fn proof(deps: Deps, id: u64) -> StdResult<ProofResponse> {
-    let proof = PROOFS.load(deps.storage, id)?;
+    let proof = proofs().load(deps.storage, id)?;
     
     Ok(ProofResponse {
         id: proof.id,
+        worker_did: proof.worker_did,
         data_hash: proof.data_hash,
-        original_data_reference: proof.original_data_reference,
-        data_owner: proof.data_owner, 
+        tw_start: proof.tw_start,
+        tw_end: proof.tw_end,
+        batch_metadata: proof.batch_metadata,
         metadata_json: proof.metadata_json,
-        stored_at: proof.stored_at, // Renamed from verified_at
+        stored_at: proof.stored_at,
         stored_by: proof.stored_by.to_string(),
-        tw_start: proof.tw_start, // Added
-        tw_end: proof.tw_end,     // Added
-        value_in: proof.value_in, // Added
-        value_out: proof.value_out, // Added
-        unit: proof.unit,         // Added
     })
 }
 
@@ -60,10 +58,10 @@ pub fn proof_by_hash(deps: Deps, data_hash: String) -> StdResult<ProofResponse> 
     proof(deps, id)
 }
 
-/// Query all proofs with pagination.
+/// Query all proofs with pagination (Phase 1b).
 /// Returns a list of proofs, allowing for pagination using `start_after` (proof ID) and `limit`.
 /// Useful for iterating through all stored proofs.
-pub fn proofs(
+pub fn query_proofs(
     deps: Deps,
     start_after: Option<u64>,
     limit: Option<u32>,
@@ -72,89 +70,97 @@ pub fn proofs(
     
     let start = start_after.map(|id| Bound::exclusive(id));
     
-    let proofs = PROOFS
+    let proofs_list = proofs()
         .range(deps.storage, start, None, Order::Ascending)
         .take(limit)
         .map(|item| {
             item.map(|(_, proof)| ProofResponse {
                 id: proof.id,
+                worker_did: proof.worker_did,
                 data_hash: proof.data_hash,
-                original_data_reference: proof.original_data_reference,
-                data_owner: proof.data_owner.clone(),
+                batch_metadata: proof.batch_metadata,
                 metadata_json: proof.metadata_json,
-                stored_at: proof.stored_at, // Renamed from verified_at
+                stored_at: proof.stored_at,
                 stored_by: proof.stored_by.to_string(),
-                tw_start: proof.tw_start, // Added
-                tw_end: proof.tw_end,     // Added
-                value_in: proof.value_in, // Added
-                value_out: proof.value_out, // Added
-                unit: proof.unit,         // Added
+                tw_start: proof.tw_start,
+                tw_end: proof.tw_end,
             })
         })
         .collect::<StdResult<Vec<_>>>()?;
     
-    Ok(ProofsResponse { proofs })
+    Ok(ProofsResponse { proofs: proofs_list })
 }
 
-/// Query user by address.
-/// Returns information about a registered user, including their address, list of proof IDs they own,
-/// and registration timestamp.
-pub fn user(deps: Deps, address: String) -> StdResult<UserResponse> {
-    let user = USERS.load(deps.storage, address)?;
-    
-    Ok(UserResponse {
-        address: user.address.to_string(),
-        proofs: user.proofs,
-        registered_at: user.registered_at,
-    })
-}
-
-/// Query proofs owned by a specific user with pagination.
-/// Returns a list of proofs owned by the specified user, with support for pagination.
-pub fn user_proofs(
+/// Query proofs by worker DID with pagination (Phase 1b).
+/// Uses secondary index for efficient worker_did lookups.
+pub fn query_proofs_by_worker(
     deps: Deps,
-    address: String,
+    worker_did: String,
     start_after: Option<u64>,
     limit: Option<u32>,
 ) -> StdResult<ProofsResponse> {
-    let user = USERS.load(deps.storage, address)?;
     let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
+    let start = start_after.map(|id| Bound::exclusive(id));
     
-    // Filter and paginate the proofs
-    let start_pos = match start_after {
-        Some(start) => user.proofs.iter().position(|&id| id > start).unwrap_or(user.proofs.len()),
-        None => 0,
-    };
-    
-    let proof_ids: Vec<u64> = user.proofs
-        .iter()
-        .skip(start_pos)
+    let proofs_list = proofs()
+        .idx
+        .worker
+        .prefix(worker_did)
+        .range(deps.storage, start, None, Order::Ascending)
         .take(limit)
-        .cloned()
-        .collect();
+        .map(|item| {
+            item.map(|(_, proof)| ProofResponse {
+                id: proof.id,
+                worker_did: proof.worker_did,
+                data_hash: proof.data_hash,
+                batch_metadata: proof.batch_metadata,
+                metadata_json: proof.metadata_json,
+                stored_at: proof.stored_at,
+                stored_by: proof.stored_by.to_string(),
+                tw_start: proof.tw_start,
+                tw_end: proof.tw_end,
+            })
+        })
+        .collect::<StdResult<Vec<_>>>()?;
     
-    let mut proofs_resp: Vec<ProofResponse> = Vec::with_capacity(proof_ids.len());
+    Ok(ProofsResponse { proofs: proofs_list })
+}
+
+/// Query proofs by gateway DID with pagination (Phase 1b).
+/// Uses manual GATEWAY_PROOFS index for efficient gateway_did lookups.
+pub fn query_proofs_by_gateway(
+    deps: Deps,
+    gateway_did: String,
+    start_after: Option<u64>,
+    limit: Option<u32>,
+) -> StdResult<ProofsResponse> {
+    let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
+    let start = start_after.map(|id| Bound::exclusive(id));
     
-    // Load each proof
+    let proof_ids: Vec<u64> = GATEWAY_PROOFS
+        .prefix(&gateway_did)
+        .range(deps.storage, start, None, Order::Ascending)
+        .take(limit)
+        .map(|item| item.map(|(id, _)| id))
+        .collect::<StdResult<Vec<_>>>()?;
+    
+    let mut proofs_list = Vec::with_capacity(proof_ids.len());
     for id in proof_ids {
-        let proof_from_storage = PROOFS.load(deps.storage, id)?;
-        proofs_resp.push(ProofResponse {
-            id: proof_from_storage.id,
-            data_hash: proof_from_storage.data_hash,
-            original_data_reference: proof_from_storage.original_data_reference,
-            data_owner: proof_from_storage.data_owner.clone(),
-            metadata_json: proof_from_storage.metadata_json,
-            stored_at: proof_from_storage.stored_at, // Renamed from verified_at
-            stored_by: proof_from_storage.stored_by.to_string(),
-            tw_start: proof_from_storage.tw_start, // Added
-            tw_end: proof_from_storage.tw_end,     // Added
-            value_in: proof_from_storage.value_in, // Added
-            value_out: proof_from_storage.value_out, // Added
-            unit: proof_from_storage.unit,         // Added
+        let proof = proofs().load(deps.storage, id)?;
+        proofs_list.push(ProofResponse {
+            id: proof.id,
+            worker_did: proof.worker_did,
+            data_hash: proof.data_hash,
+            batch_metadata: proof.batch_metadata,
+            metadata_json: proof.metadata_json,
+            stored_at: proof.stored_at,
+            stored_by: proof.stored_by.to_string(),
+            tw_start: proof.tw_start,
+            tw_end: proof.tw_end,
         });
     }
     
-    Ok(ProofsResponse { proofs: proofs_resp })
+    Ok(ProofsResponse { proofs: proofs_list })
 }
 
 /// Query if an address is a whitelisted (or registered) node.

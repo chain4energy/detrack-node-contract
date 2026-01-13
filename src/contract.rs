@@ -125,10 +125,11 @@ pub fn query(
         QueryMsg::Config {} => to_json_binary(&query::config(deps)?),
         QueryMsg::Proof { id } => to_json_binary(&query::proof(deps, id)?),
         QueryMsg::ProofByHash { data_hash } => to_json_binary(&query::proof_by_hash(deps, data_hash)?),
-        QueryMsg::Proofs { start_after, limit } => to_json_binary(&query::proofs(deps, start_after, limit)?),
-        QueryMsg::User { address } => to_json_binary(&query::user(deps, address)?),
-        QueryMsg::UserProofs { address, start_after, limit } => 
-            to_json_binary(&query::user_proofs(deps, address, start_after, limit)?),
+        QueryMsg::Proofs { start_after, limit } => to_json_binary(&query::query_proofs(deps, start_after, limit)?),
+        QueryMsg::ProofsByWorker { worker_did, start_after, limit } => 
+            to_json_binary(&query::query_proofs_by_worker(deps, worker_did, start_after, limit)?),
+        QueryMsg::ProofsByGateway { gateway_did, start_after, limit } =>
+            to_json_binary(&query::query_proofs_by_gateway(deps, gateway_did, start_after, limit)?),
         QueryMsg::IsWhitelisted { address } => to_json_binary(&query::is_whitelisted(deps, address)?),
         QueryMsg::NodeReputation { address } => to_json_binary(&query::node_reputation(deps, address)?),
         QueryMsg::NodeInfo { address } => to_json_binary(&query::node_info(deps, address)?),

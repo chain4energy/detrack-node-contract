@@ -1,8 +1,8 @@
 use crate::error::ContractError;
-use crate::state::{Node, CONFIG, WHITELISTED_NODES, UNLOCKING_DEPOSITS, UnlockingDeposit, proofs, GATEWAY_PROOFS, PROOF_BY_HASH, Proof, USERS, User};
+use crate::state::{Node, CONFIG, WHITELISTED_NODES, UNLOCKING_DEPOSITS, UnlockingDeposit, proofs, GATEWAY_PROOFS, PROOF_BY_HASH, Proof};
 use crate::msg::BatchInfo;
 use crate::helpers::get_native_staked_amount; // Added import
-use cosmwasm_std::{BankMsg, Event, Coin, Uint128, DepsMut, Env, MessageInfo, Response};
+use cosmwasm_std::{BankMsg, Event, Coin, Uint128, Timestamp, DepsMut, Env, MessageInfo, Response};
 
 /// ADMIN OPERATIONS
 
@@ -199,64 +199,132 @@ fn validate_node(
     Ok(())
 }
 
-/// Stores a new proof on the blockchain
+// ============================================================================
+// NODE OPERATIONS - Phase 1b (DID-First Architecture)
+// ============================================================================
+
+/// Verify DID exists and is active in the DID Contract
+/// 
+/// This function queries the DID Contract to ensure the provided DID is registered
+/// and follows the correct format for the expected type (worker or gateway).
+/// 
+/// # Arguments
+/// * `deps` - Dependencies for querying
+/// * `did` - The W3C DID to verify (e.g., "did:c4e:worker:detrack1")
+/// * `expected_type` - Expected DID type ("worker" or "gateway")
+/// 
+/// # Returns
+/// * `Ok(())` if DID is valid and registered
+/// * `Err(ContractError)` if DID is invalid or not found
+fn verify_did(
+    _deps: &cosmwasm_std::Deps,
+    did: &str,
+    expected_type: &str,
+) -> Result<(), ContractError> {
+    // Validate DID format
+    if !did.starts_with(&format!("did:c4e:{}:", expected_type)) {
+        return Err(ContractError::InvalidDidFormat { did: did.to_string() });
+    }
+    
+    // Skip DID Contract query in test mode (no real DID Contract available)
+    #[cfg(test)]
+    {
+        return Ok(());
+    }
+    
+    // Production: Query DID Contract to verify DID exists
+    #[cfg(not(test))]
+    {
+    use cosmwasm_std::{to_json_binary, WasmQuery, QueryRequest};
+    use serde::{Deserialize, Serialize};
+    
+    // Load DID contract address from config
+    let config = CONFIG.load(_deps.storage)?;
+    
+    // Query DID contract to verify DID exists
+    #[derive(Serialize)]
+    #[serde(rename_all = "snake_case")]
+    enum DidQueryMsg {
+        GetDidDocument { did: String },
+    }
+    
+    #[derive(Deserialize)]
+    #[allow(dead_code)]
+    struct DidDocumentResponse {
+        id: String,
+        controller: String,
+        service: Vec<serde_json::Value>,
+    }
+    
+    let query_msg = DidQueryMsg::GetDidDocument { did: did.to_string() };
+    let query_request: QueryRequest<cosmwasm_std::Empty> = QueryRequest::Wasm(WasmQuery::Smart {
+        contract_addr: config.did_contract_address.to_string(),
+        msg: to_json_binary(&query_msg)?,
+    });
+    
+    let response: Result<DidDocumentResponse, _> = _deps.querier.query(&query_request);
+    
+    match response {
+        Ok(_doc) => Ok(()),
+        Err(_) => Err(ContractError::DidNotFound { did: did.to_string() }),
+    }
+    } // end cfg(not(test))
+}
+
+/// Stores a new proof on the blockchain (Phase 1b: Multi-batch aggregation)
+/// 
 /// Access Control: Only whitelisted nodes with sufficient reputation can store proofs.
+/// DID Verification: Verifies worker_did and all gateway_dids in batch_metadata.
+/// 
 /// Logic:
-/// - Validates the calling node.
-/// - Checks for data hash validity and uniqueness.
-/// - Increments the global proof count.
-/// - Validates the optional data owner.
-/// - Creates and saves the proof.
-/// - Indexes the proof by its data hash for quick lookups.
-/// - Updates the user\'s list of proofs if a data owner is provided.
-/// Events: Emits attributes for "store_proof", "proof_id", "data_hash", "stored_by".
+/// - Validates the calling node (whitelist + reputation)
+/// - Verifies Worker DID exists in DID Contract
+/// - Verifies all Gateway DIDs in batch_metadata
+/// - Validates batch_metadata (not empty, not too many batches)
+/// - Checks data hash validity and uniqueness
+/// - Creates and saves proof with IndexedMap
+/// - Indexes by gateway DIDs for efficient queries
+/// 
+/// Events: Emits attributes for "store_proof", "proof_id", "worker_did", "data_hash", etc.
+/// 
 /// Errors:
-/// - `InvalidInput` if data hash is empty.
-/// - `ProofAlreadyExists` if a proof with the same hash exists.
-/// - `InvalidDataOwner` if the provided data owner address is invalid.
+/// - `InvalidDidFormat` if DIDs don't match expected format
+/// - `DidNotFound` if any DID is not registered
+/// - `EmptyBatchMetadata` if no batches provided
+/// - `TooManyBatches` if more than 100 batches
+/// - `ProofAlreadyExists` if hash already exists
+/// - `InvalidInput` for validation failures
 pub fn store_proof(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
+    worker_did: String,
     data_hash: String,
-    original_data_reference: Option<String>,
-    data_owner: Option<String>,
+    tw_start: Timestamp,
+    tw_end: Timestamp,
+    batch_metadata: Vec<BatchInfo>,
     metadata_json: Option<String>,
-    tw_start: Timestamp, // Added
-    tw_end: Timestamp,   // Added
-    value_in: Option<Uint128>, // Added
-    value_out: Option<Uint128>, // Added
-    unit: String,        // Added
 ) -> Result<Response, ContractError> {
-    // Check that sender is a whitelisted node (or registered node if use_whitelist is false, handled by validate_node)
-    // and has sufficient reputation.
+    // Validate calling node
     validate_node(&deps, &info)?;
-
-    // Load node details and config for validation
-    let node = WHITELISTED_NODES.load(deps.storage, info.sender.to_string())
-        .map_err(|_| ContractError::NodeNotRegistered { address: info.sender.to_string() })?; // Should not happen if validate_node passed
     
-    let mut config = CONFIG.load(deps.storage)?; // Load config for validation and proof_count
-
-    // Validate Node's Tier and Deposit
-    // 1. Check if node tier is operational (1, 2, or 3)
+    let node = WHITELISTED_NODES.load(deps.storage, info.sender.to_string())
+        .map_err(|_| ContractError::NodeNotRegistered { address: info.sender.to_string() })?;
+    
+    let mut config = CONFIG.load(deps.storage)?;
+    
+    // Validate node tier and deposit
     if !(1..=3).contains(&node.tier) {
         return Err(ContractError::NodeTierNotOperational { current_tier: node.tier });
     }
-
-    // 2. Determine required deposit for the node's tier
+    
     let required_deposit_for_tier = match node.tier {
         3 => config.deposit_tier3,
         2 => config.deposit_tier2,
         1 => config.deposit_tier1,
-        _ => {
-            // This case should ideally be unreachable due to the check above,
-            // but as a safeguard:
-            return Err(ContractError::NodeTierNotOperational { current_tier: node.tier });
-        }
+        _ => return Err(ContractError::NodeTierNotOperational { current_tier: node.tier }),
     };
-
-    // 3. Verify node's locked deposit meets the tier requirement
+    
     if node.deposit < required_deposit_for_tier {
         return Err(ContractError::NodeHasInsufficientDeposit {
             required_deposit: required_deposit_for_tier,
@@ -264,94 +332,95 @@ pub fn store_proof(
             tier: node.tier,
         });
     }
-
+    
+    // Phase 1b: Verify Worker DID
+    verify_did(&deps.as_ref(), &worker_did, "worker")?;
+    
+    // Phase 1b: Validate batch_metadata
+    if batch_metadata.is_empty() {
+        return Err(ContractError::EmptyBatchMetadata {});
+    }
+    
+    if batch_metadata.len() > 100 {
+        return Err(ContractError::TooManyBatches { count: batch_metadata.len() });
+    }
+    
+    // Phase 1b: Verify all Gateway DIDs in batch_metadata
+    for batch in &batch_metadata {
+        verify_did(&deps.as_ref(), &batch.gateway_did, "gateway")?;
+    }
+    
     // Validate data_hash
     if data_hash.is_empty() {
         return Err(ContractError::InvalidInput("Data hash cannot be empty".to_string()));
     }
-
-    // Check if proof with the same hash already exists
+    
+    if data_hash.len() != 64 || !data_hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(ContractError::InvalidInput("Data hash must be 64 hex characters".to_string()));
+    }
+    
+    // Check if proof already exists
     if PROOF_BY_HASH.has(deps.storage, &data_hash) {
         return Err(ContractError::ProofAlreadyExists(data_hash));
     }
-
-    // Load config to increment proof_count - config is already loaded and mutable
+    
+    // Increment proof count
     let proof_id = config.proof_count;
     config.proof_count += 1;
     CONFIG.save(deps.storage, &config)?;
-
-    // Validate data_owner if provided
-    let data_owner_addr = match &data_owner {
-        Some(addr) => {
-            let validated = deps.api.addr_validate(addr);
-            match validated {
-                Ok(addr) => Some(addr),
-                Err(_) => return Err(ContractError::InvalidDataOwner(addr.to_string())),
-            }
-        },
-        None => None,
-    };
-
-    // Create new proof
+    
+    // Create new proof (Phase 1b structure)
     let proof = Proof {
         id: proof_id,
+        worker_did: worker_did.clone(),
         data_hash: data_hash.clone(),
-        original_data_reference,
-        data_owner: data_owner_addr.clone().map(|addr| addr.to_string()), // Convert Addr to String
+        tw_start,
+        tw_end,
+        batch_metadata: batch_metadata.clone(),
         metadata_json,
-        stored_at: env.block.time, // Renamed from verified_at
+        stored_at: env.block.time,
         stored_by: info.sender.clone(),
-        tw_start: tw_start, // Added
-        tw_end: tw_end,   // Added
-        value_in: value_in, // Added
-        value_out: value_out, // Added
-        unit: unit,     // Added
     };
-
-    // Save proof by ID
-    PROOFS.save(deps.storage, proof_id, &proof)?;
+    
+    // Save proof with IndexedMap (auto-indexes by worker_did)
+    proofs().save(deps.storage, proof_id, &proof)?;
     
     // Index proof by hash
     PROOF_BY_HASH.save(deps.storage, &data_hash, &proof_id)?;
-
-    // Determine the owner for the USERS map.
-    // This is the original data_owner string if provided, otherwise the sender's (node's) address string.
-    let owner_key_str = data_owner.clone().unwrap_or_else(|| info.sender.to_string());
-
-    // Always update/create user and push the new proof_id to their list
-    USERS.update(deps.storage, owner_key_str.clone(), |maybe_user| -> Result<User, cosmwasm_std::StdError> {
-        // The address for the User struct should be the validated Addr type.
-        // owner_key_str is already validated if it came from data_owner_addr,
-        // or it's info.sender.to_string() which is inherently valid to be converted back to Addr.
-        let user_struct_addr = deps.api.addr_validate(&owner_key_str)?;
-        
-        let mut user = match maybe_user {
-            Some(u) => u,
-            None => User {
-                address: user_struct_addr, // Store the Addr type
-                proofs: vec![],
-                registered_at: env.block.time,
-            },
-        };
-        
-        if !user.proofs.contains(&proof_id) { // Prevent duplicate proof IDs
-            user.proofs.push(proof_id);
-        }
-        Ok(user)
-    })?;
-
-    // TODO: Implement slashing mechanism for nodes storing malicious or incorrect proofs.
-    // This would involve a dispute process and subsequent reputation/deposit slashing.
-
-    Ok(Response::new()
+    
+    // Phase 1b: Index by gateway DIDs (manual index)
+    for batch in &batch_metadata {
+        GATEWAY_PROOFS.save(
+            deps.storage,
+            (&batch.gateway_did, proof_id),
+            &(),
+        )?;
+    }
+    
+    // Build event attributes
+    let mut event = Event::new("store_proof")
         .add_attribute("action", "store_proof")
         .add_attribute("proof_id", proof_id.to_string())
+        .add_attribute("worker_did", worker_did)
         .add_attribute("data_hash", data_hash)
         .add_attribute("stored_by", info.sender.to_string())
-        .add_attribute("data_owner", proof.data_owner.unwrap_or_else(|| "N/A".to_string())))
+        .add_attribute("batch_count", batch_metadata.len().to_string())
+        .add_attribute("tw_start", tw_start.to_string())
+        .add_attribute("tw_end", tw_end.to_string());
+    
+    // Add gateway DIDs to event (comma-separated)
+    let gateway_dids: Vec<String> = batch_metadata.iter()
+        .map(|b| b.gateway_did.clone())
+        .collect();
+    event = event.add_attribute("gateway_dids", gateway_dids.join(","));
+    
+    Ok(Response::new()
+        .add_event(event))
 }
 
-/// Verifies a proof's existence
+
+/// Verifies a proof's existence by its data hash.
+/// 
 pub fn verify_proof(
     deps: DepsMut,
     _env: Env,

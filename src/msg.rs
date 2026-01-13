@@ -69,10 +69,10 @@ pub enum NodeExecuteMsg {
         worker_did: String,
         /// SHA-256 hash of the blockchain Merkle root (aggregates all batches)
         data_hash: String,
-        /// Start of time window (nanosecond timestamp as string)
-        tw_start: String,
-        /// End of time window (nanosecond timestamp as string)
-        tw_end: String,
+        /// Start of time window (CosmWasm Timestamp)
+        tw_start: Timestamp,
+        /// End of time window (CosmWasm Timestamp)
+        tw_end: Timestamp,
         /// Array of batch metadata (one entry per gateway batch)
         batch_metadata: Vec<BatchInfo>,
         /// Optional JSON metadata for additional information
@@ -122,12 +122,6 @@ pub enum QueryMsg {
     /// Returns a list of all proofs
     #[returns(ProofsResponse)]
     Proofs { start_after: Option<u64>, limit: Option<u32> },
-    /// Returns a user's profile
-    #[returns(UserResponse)]
-    User { address: String },
-    /// Returns a list of proofs from a specific owner
-    #[returns(ProofsResponse)]
-    UserProofs { address: String, start_after: Option<u64>, limit: Option<u32> },
     /// Returns whether a node is whitelisted
     #[returns(WhitelistedResponse)]
     IsWhitelisted { address: String },
@@ -180,10 +174,10 @@ pub struct ProofResponse {
     pub worker_did: String,
     /// SHA-256 hash of the blockchain Merkle root
     pub data_hash: String,
-    /// Start of time window (nanosecond timestamp as string)
-    pub tw_start: String,
-    /// End of time window (nanosecond timestamp as string)
-    pub tw_end: String,
+    /// Start of time window (CosmWasm Timestamp)
+    pub tw_start: Timestamp,
+    /// End of time window (CosmWasm Timestamp)
+    pub tw_end: Timestamp,
     /// Array of batch metadata (multi-batch aggregation)
     pub batch_metadata: Vec<BatchInfo>,
     /// Optional JSON metadata
@@ -197,13 +191,6 @@ pub struct ProofResponse {
 #[cw_serde]
 pub struct ProofsResponse {
     pub proofs: Vec<ProofResponse>,
-}
-
-#[cw_serde]
-pub struct UserResponse {
-    pub address: String,
-    pub proofs: Vec<u64>,
-    pub registered_at: Timestamp,
 }
 
 #[cw_serde]

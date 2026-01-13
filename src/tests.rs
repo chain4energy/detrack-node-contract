@@ -5,8 +5,9 @@ mod tests {
 
     use crate::contract::{execute, instantiate, query};
     use crate::msg::{
-        ExecuteMsg, InstantiateMsg, QueryMsg, ConfigResponse, ProofResponse, NodeExecuteMsg,
+        ExecuteMsg, InstantiateMsg, QueryMsg, ConfigResponse, ProofResponse, ProofsResponse, NodeExecuteMsg,
         AdminExecuteMsg, NodeInfoResponse, WhitelistedResponse, NodeReputationResponse,
+        BatchInfo,
     };
     use crate::error::ContractError;
 
@@ -26,6 +27,7 @@ mod tests {
     fn default_instantiate_msg() -> InstantiateMsg {
         InstantiateMsg {
             admin: Some(ADMIN.to_string()),
+            did_contract_address: "c4e1qkphn8h2rnyqjjtfh8j8dtuqgh5cac57nq2286tsljducqp4lwfqvsysy0".to_string(),
             version: "1.0.0".to_string(),
             min_stake_tier1: Uint128::new(1000),
             min_stake_tier2: Uint128::new(5000),
@@ -138,19 +140,22 @@ mod tests {
         )
         .unwrap();
 
-        // Store a proof
+        // Store a proof (Phase 1b format)
+        let batch_metadata = vec![BatchInfo {
+            batch_id: "batch-001".to_string(),
+            gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
+            device_count: 5,
+            snapshot_count: 10,
+            batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+        }];
+        
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack1".to_string(),
             data_hash: DATA_HASH.to_string(),
-            original_data_reference: Some(
-                "ipfs://QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco".to_string(),
-            ),
-            data_owner: Some(USER.to_string()),
+            tw_start: Timestamp::from_nanos(1704067200000000000), // 2024-01-01 00:00:00 UTC
+            tw_end: Timestamp::from_nanos(1704153600000000000),   // 2024-01-02 00:00:00 UTC
+            batch_metadata,
             metadata_json: Some(r#"{"facility_id": "F123", "device_id": "D456"}"#.to_string()),
-            tw_start: Timestamp::from_nanos(0),
-            tw_end: Timestamp::from_nanos(0),
-            value_in: None,
-            value_out: None,
-            unit: "kWh".to_string(),
         });
 
         app.execute_contract(
@@ -305,17 +310,22 @@ mod tests {
         // Assuming ContractError::Unauthorized or a similar specific error like AdminOnly.
         assert!(matches!(err.downcast_ref::<ContractError>().unwrap(), ContractError::AdminOnlyOperation {}));
 
-        // USER2 (not whitelisted) tries to store proof when use_whitelist is true
+        // USER2 (not whitelisted) tries to store proof when use_whitelist is true (Phase 1b format)
+        let batch_metadata = vec![BatchInfo {
+            batch_id: "batch-002".to_string(),
+            gateway_did: r"did:c4e:gateway:test-gw2".to_string(),
+            device_count: 3,
+            snapshot_count: 6,
+            batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+        }];
+        
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack2".to_string(),
             data_hash: DATA_HASH.to_string(),
-            original_data_reference: None,
-            data_owner: None,
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata,
             metadata_json: None,
-            tw_start: Timestamp::from_nanos(0), // Added
-            tw_end: Timestamp::from_nanos(0), // Added
-            value_in: None, // Added
-            value_out: None, // Added
-            unit: "kWh".to_string(), // Added
         });
 
         let err_store = app
@@ -354,15 +364,22 @@ mod tests {
         let err_admin_op = app.execute_contract(Addr::unchecked(USER2), contract_addr.clone(), &set_whitelist_mode_msg, &[]).unwrap_err();
         assert!(matches!(err_admin_op.downcast_ref::<ContractError>().unwrap(), ContractError::AdminOnlyOperation {})); // Changed to AdminOnlyOperation
 
-        // USER (not registered) tries to store proof
+        // USER (not registered) tries to store proof (Phase 1b format)
+        let batch_metadata = vec![BatchInfo {
+            batch_id: "batch-003".to_string(),
+            gateway_did: r"did:c4e:gateway:test-gw3".to_string(),
+            device_count: 2,
+            snapshot_count: 4,
+            batch_merkle_root: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210".to_string(),
+        }];
+        
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
-            data_hash: "some_hash".to_string(),
-            original_data_reference: None, data_owner: None, metadata_json: None,
-            tw_start: Timestamp::from_nanos(0), // Added
-            tw_end: Timestamp::from_nanos(0), // Added
-            value_in: None, // Added
-            value_out: None, // Added
-            unit: "kWh".to_string(), // Added
+            worker_did: r"did:c4e:worker:detrack3".to_string(),
+            data_hash: "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab".to_string(), // Valid 64-char hex
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata,
+            metadata_json: None,
         });
         let err_store = app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[]).unwrap_err();
         assert!(matches!(err_store.downcast_ref::<ContractError>().unwrap(), ContractError::NodeNotWhitelisted(ref addr) if addr == USER), "Expected NodeNotWhitelisted error, got {:?}", err_store);
@@ -531,5 +548,599 @@ mod tests {
             err_claim_again.downcast_ref::<ContractError>().unwrap(),
             ContractError::NoUnlockedDepositToClaim {}
         ));
+    }
+
+    // =========================================================================
+    // COMPREHENSIVE STORE_PROOF TESTS
+    // =========================================================================
+
+    #[test]
+    fn test_store_proof_error_empty_batch_metadata() {
+        let mut app = mock_app();
+        let contract_id = app.store_code(detrack_contract());
+        let instantiate_msg = default_instantiate_msg();
+        let contract_addr = app
+            .instantiate_contract(contract_id, Addr::unchecked(ADMIN), &instantiate_msg, &[], "DeTrack", None)
+            .unwrap();
+
+        // Register node
+        let register_msg = ExecuteMsg::Node(NodeExecuteMsg::RegisterNode {});
+        app.execute_contract(
+            Addr::unchecked(USER),
+            contract_addr.clone(),
+            &register_msg,
+            &coins(instantiate_msg.deposit_tier1.u128(), NATIVE_DENOM),
+        )
+        .unwrap();
+
+        // Try to store proof with empty batch_metadata
+        let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack1".to_string(),
+            data_hash: DATA_HASH.to_string(),
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata: vec![], // EMPTY
+            metadata_json: None,
+        });
+
+        let err = app
+            .execute_contract(Addr::unchecked(USER), contract_addr, &store_msg, &[])
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ContractError>().unwrap(),
+            ContractError::EmptyBatchMetadata {}
+        ));
+    }
+
+    #[test]
+    fn test_store_proof_error_too_many_batches() {
+        let mut app = mock_app();
+        let contract_id = app.store_code(detrack_contract());
+        let instantiate_msg = default_instantiate_msg();
+        let contract_addr = app
+            .instantiate_contract(contract_id, Addr::unchecked(ADMIN), &instantiate_msg, &[], "DeTrack", None)
+            .unwrap();
+
+        // Register node
+        let register_msg = ExecuteMsg::Node(NodeExecuteMsg::RegisterNode {});
+        app.execute_contract(
+            Addr::unchecked(USER),
+            contract_addr.clone(),
+            &register_msg,
+            &coins(instantiate_msg.deposit_tier1.u128(), NATIVE_DENOM),
+        )
+        .unwrap();
+
+        // Create 101 batches (over limit)
+        let batch_metadata: Vec<BatchInfo> = (0..101)
+            .map(|i| BatchInfo {
+                batch_id: format!("batch-{:03}", i),
+                gateway_did: format!("did:c4e:gateway:gw{}", i % 5),
+                device_count: 5,
+                snapshot_count: 10,
+                batch_merkle_root: format!("{:0<64}", format!("{:x}", i)),
+            })
+            .collect();
+
+        let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack1".to_string(),
+            data_hash: DATA_HASH.to_string(),
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata,
+            metadata_json: None,
+        });
+
+        let err = app
+            .execute_contract(Addr::unchecked(USER), contract_addr, &store_msg, &[])
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ContractError>().unwrap(),
+            ContractError::TooManyBatches { count: 101 }
+        ));
+    }
+
+    #[test]
+    fn test_store_proof_error_invalid_data_hash() {
+        let mut app = mock_app();
+        let contract_id = app.store_code(detrack_contract());
+        let instantiate_msg = default_instantiate_msg();
+        let contract_addr = app
+            .instantiate_contract(contract_id, Addr::unchecked(ADMIN), &instantiate_msg, &[], "DeTrack", None)
+            .unwrap();
+
+        // Register node
+        let register_msg = ExecuteMsg::Node(NodeExecuteMsg::RegisterNode {});
+        app.execute_contract(
+            Addr::unchecked(USER),
+            contract_addr.clone(),
+            &register_msg,
+            &coins(instantiate_msg.deposit_tier1.u128(), NATIVE_DENOM),
+        )
+        .unwrap();
+
+        let batch_metadata = vec![BatchInfo {
+            batch_id: "batch-001".to_string(),
+            gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
+            device_count: 5,
+            snapshot_count: 10,
+            batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+        }];
+
+        // Test 1: Empty data_hash
+        let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack1".to_string(),
+            data_hash: "".to_string(), // EMPTY
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata: batch_metadata.clone(),
+            metadata_json: None,
+        });
+
+        let err = app
+            .execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[])
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ContractError>().unwrap(),
+            ContractError::InvalidInput(_)
+        ));
+
+        // Test 2: Invalid length (not 64 chars)
+        let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack1".to_string(),
+            data_hash: "abc123".to_string(), // TOO SHORT
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata: batch_metadata.clone(),
+            metadata_json: None,
+        });
+
+        let err = app
+            .execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[])
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ContractError>().unwrap(),
+            ContractError::InvalidInput(_)
+        ));
+
+        // Test 3: Invalid characters (not hex)
+        let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack1".to_string(),
+            data_hash: "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ".to_string(), // INVALID HEX
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata,
+            metadata_json: None,
+        });
+
+        let err = app
+            .execute_contract(Addr::unchecked(USER), contract_addr, &store_msg, &[])
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ContractError>().unwrap(),
+            ContractError::InvalidInput(_)
+        ));
+    }
+
+    #[test]
+    fn test_store_proof_error_proof_already_exists() {
+        let mut app = mock_app();
+        let contract_id = app.store_code(detrack_contract());
+        let instantiate_msg = default_instantiate_msg();
+        let contract_addr = app
+            .instantiate_contract(contract_id, Addr::unchecked(ADMIN), &instantiate_msg, &[], "DeTrack", None)
+            .unwrap();
+
+        // Register node
+        let register_msg = ExecuteMsg::Node(NodeExecuteMsg::RegisterNode {});
+        app.execute_contract(
+            Addr::unchecked(USER),
+            contract_addr.clone(),
+            &register_msg,
+            &coins(instantiate_msg.deposit_tier1.u128(), NATIVE_DENOM),
+        )
+        .unwrap();
+
+        let batch_metadata = vec![BatchInfo {
+            batch_id: "batch-001".to_string(),
+            gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
+            device_count: 5,
+            snapshot_count: 10,
+            batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+        }];
+
+        let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack1".to_string(),
+            data_hash: DATA_HASH.to_string(),
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata: batch_metadata.clone(),
+            metadata_json: None,
+        });
+
+        // First submission - should succeed
+        app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[])
+            .unwrap();
+
+        // Second submission with same data_hash - should fail
+        let err = app
+            .execute_contract(Addr::unchecked(USER), contract_addr, &store_msg, &[])
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ContractError>().unwrap(),
+            ContractError::ProofAlreadyExists(_)
+        ));
+    }
+
+    #[test]
+    fn test_store_proof_error_invalid_did_format() {
+        let mut app = mock_app();
+        let contract_id = app.store_code(detrack_contract());
+        let instantiate_msg = default_instantiate_msg();
+        let contract_addr = app
+            .instantiate_contract(contract_id, Addr::unchecked(ADMIN), &instantiate_msg, &[], "DeTrack", None)
+            .unwrap();
+
+        // Register node
+        let register_msg = ExecuteMsg::Node(NodeExecuteMsg::RegisterNode {});
+        app.execute_contract(
+            Addr::unchecked(USER),
+            contract_addr.clone(),
+            &register_msg,
+            &coins(instantiate_msg.deposit_tier1.u128(), NATIVE_DENOM),
+        )
+        .unwrap();
+
+        // Test 1: Invalid worker_did format
+        let batch_metadata = vec![BatchInfo {
+            batch_id: "batch-001".to_string(),
+            gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
+            device_count: 5,
+            snapshot_count: 10,
+            batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+        }];
+
+        let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: "invalid-did-format".to_string(), // INVALID
+            data_hash: DATA_HASH.to_string(),
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata: batch_metadata.clone(),
+            metadata_json: None,
+        });
+
+        let err = app
+            .execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[])
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ContractError>().unwrap(),
+            ContractError::InvalidDidFormat { .. }
+        ));
+
+        // Test 2: Invalid gateway_did format
+        let batch_metadata = vec![BatchInfo {
+            batch_id: "batch-001".to_string(),
+            gateway_did: "not-a-did".to_string(), // INVALID
+            device_count: 5,
+            snapshot_count: 10,
+            batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+        }];
+
+        let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack1".to_string(),
+            data_hash: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef".to_string(),
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata,
+            metadata_json: None,
+        });
+
+        let err = app
+            .execute_contract(Addr::unchecked(USER), contract_addr, &store_msg, &[])
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<ContractError>().unwrap(),
+            ContractError::InvalidDidFormat { .. }
+        ));
+    }
+
+    #[test]
+    fn test_store_proof_events_emitted() {
+        let mut app = mock_app();
+        let contract_id = app.store_code(detrack_contract());
+        let instantiate_msg = default_instantiate_msg();
+        let contract_addr = app
+            .instantiate_contract(contract_id, Addr::unchecked(ADMIN), &instantiate_msg, &[], "DeTrack", None)
+            .unwrap();
+
+        // Register node
+        let register_msg = ExecuteMsg::Node(NodeExecuteMsg::RegisterNode {});
+        app.execute_contract(
+            Addr::unchecked(USER),
+            contract_addr.clone(),
+            &register_msg,
+            &coins(instantiate_msg.deposit_tier1.u128(), NATIVE_DENOM),
+        )
+        .unwrap();
+
+        let batch_metadata = vec![
+            BatchInfo {
+                batch_id: "batch-001".to_string(),
+                gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
+                device_count: 5,
+                snapshot_count: 10,
+                batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            },
+            BatchInfo {
+                batch_id: "batch-002".to_string(),
+                gateway_did: r"did:c4e:gateway:test-gw2".to_string(),
+                device_count: 3,
+                snapshot_count: 8,
+                batch_merkle_root: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210".to_string(),
+            },
+        ];
+
+        let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack1".to_string(),
+            data_hash: DATA_HASH.to_string(),
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata: batch_metadata.clone(),
+            metadata_json: Some(r#"{"test": "metadata"}"#.to_string()),
+        });
+
+        let res = app
+            .execute_contract(Addr::unchecked(USER), contract_addr, &store_msg, &[])
+            .unwrap();
+
+        // Verify events
+        let store_proof_event = res.events.iter().find(|e| e.ty == "wasm-store_proof").unwrap();
+        
+        assert_eq!(
+            store_proof_event.attributes.iter().find(|a| a.key == "action").unwrap().value,
+            "store_proof"
+        );
+        assert_eq!(
+            store_proof_event.attributes.iter().find(|a| a.key == "proof_id").unwrap().value,
+            "0"
+        );
+        assert_eq!(
+            store_proof_event.attributes.iter().find(|a| a.key == "worker_did").unwrap().value,
+            r"did:c4e:worker:detrack1"
+        );
+        assert_eq!(
+            store_proof_event.attributes.iter().find(|a| a.key == "data_hash").unwrap().value,
+            DATA_HASH
+        );
+        assert_eq!(
+            store_proof_event.attributes.iter().find(|a| a.key == "stored_by").unwrap().value,
+            USER
+        );
+        assert_eq!(
+            store_proof_event.attributes.iter().find(|a| a.key == "batch_count").unwrap().value,
+            "2"
+        );
+        
+        let gateway_dids = store_proof_event.attributes.iter().find(|a| a.key == "gateway_dids").unwrap().value.as_str();
+        assert!(gateway_dids.contains("did:c4e:gateway:test-gw1"));
+        assert!(gateway_dids.contains("did:c4e:gateway:test-gw2"));
+    }
+
+    #[test]
+    fn test_store_proof_logic_and_indexes() {
+        let mut app = mock_app();
+        let contract_id = app.store_code(detrack_contract());
+        let instantiate_msg = default_instantiate_msg();
+        let contract_addr = app
+            .instantiate_contract(contract_id, Addr::unchecked(ADMIN), &instantiate_msg, &[], "DeTrack", None)
+            .unwrap();
+
+        // Register node
+        let register_msg = ExecuteMsg::Node(NodeExecuteMsg::RegisterNode {});
+        app.execute_contract(
+            Addr::unchecked(USER),
+            contract_addr.clone(),
+            &register_msg,
+            &coins(instantiate_msg.deposit_tier1.u128(), NATIVE_DENOM),
+        )
+        .unwrap();
+
+        let batch_metadata = vec![
+            BatchInfo {
+                batch_id: "batch-001".to_string(),
+                gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
+                device_count: 5,
+                snapshot_count: 10,
+                batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            },
+            BatchInfo {
+                batch_id: "batch-002".to_string(),
+                gateway_did: r"did:c4e:gateway:test-gw2".to_string(),
+                device_count: 3,
+                snapshot_count: 8,
+                batch_merkle_root: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210".to_string(),
+            },
+        ];
+
+        let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack1".to_string(),
+            data_hash: DATA_HASH.to_string(),
+            tw_start: Timestamp::from_nanos(1704067200000000000),
+            tw_end: Timestamp::from_nanos(1704153600000000000),
+            batch_metadata: batch_metadata.clone(),
+            metadata_json: Some(r#"{"facility_id": "F123"}"#.to_string()),
+        });
+
+        app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[])
+            .unwrap();
+
+        // Test 1: Query by proof ID
+        let query_msg = QueryMsg::Proof { id: 0 };
+        let proof: ProofResponse = app.wrap().query_wasm_smart(contract_addr.clone(), &query_msg).unwrap();
+        
+        assert_eq!(proof.id, 0);
+        assert_eq!(proof.worker_did, r"did:c4e:worker:detrack1");
+        assert_eq!(proof.data_hash, DATA_HASH);
+        assert_eq!(proof.batch_metadata.len(), 2);
+        assert_eq!(proof.tw_start, Timestamp::from_nanos(1704067200000000000));
+        assert_eq!(proof.tw_end, Timestamp::from_nanos(1704153600000000000));
+
+        // Test 2: Query by data hash (index)
+        let query_msg = QueryMsg::ProofByHash { data_hash: DATA_HASH.to_string() };
+        let proof: ProofResponse = app.wrap().query_wasm_smart(contract_addr.clone(), &query_msg).unwrap();
+        assert_eq!(proof.id, 0);
+
+        // Test 3: Query by worker DID (secondary index)
+        let query_msg = QueryMsg::ProofsByWorker {
+            worker_did: r"did:c4e:worker:detrack1".to_string(),
+            start_after: None,
+            limit: None,
+        };
+        let proofs: ProofsResponse = app.wrap().query_wasm_smart(contract_addr.clone(), &query_msg).unwrap();
+        assert_eq!(proofs.proofs.len(), 1);
+        assert_eq!(proofs.proofs[0].id, 0);
+
+        // Test 4: Query by gateway DID (manual index)
+        let query_msg = QueryMsg::ProofsByGateway {
+            gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
+            start_after: None,
+            limit: None,
+        };
+        let proofs: ProofsResponse = app.wrap().query_wasm_smart(contract_addr.clone(), &query_msg).unwrap();
+        assert_eq!(proofs.proofs.len(), 1);
+
+        let query_msg = QueryMsg::ProofsByGateway {
+            gateway_did: r"did:c4e:gateway:test-gw2".to_string(),
+            start_after: None,
+            limit: None,
+        };
+        let proofs: ProofsResponse = app.wrap().query_wasm_smart(contract_addr.clone(), &query_msg).unwrap();
+        assert_eq!(proofs.proofs.len(), 1);
+
+        // Test 5: Verify proof_count incremented
+        let query_msg = QueryMsg::Config {};
+        let config: ConfigResponse = app.wrap().query_wasm_smart(contract_addr, &query_msg).unwrap();
+        assert_eq!(config.proof_count, 1);
+    }
+
+    #[test]
+    fn test_store_proof_multi_gateway_real_world() {
+        // Real-world test: 21 batches, 3 gateways (from production payload)
+        let mut app = mock_app();
+        let contract_id = app.store_code(detrack_contract());
+        let instantiate_msg = default_instantiate_msg();
+        let contract_addr = app
+            .instantiate_contract(contract_id, Addr::unchecked(ADMIN), &instantiate_msg, &[], "DeTrack", None)
+            .unwrap();
+
+        // Register node
+        let register_msg = ExecuteMsg::Node(NodeExecuteMsg::RegisterNode {});
+        app.execute_contract(
+            Addr::unchecked(USER),
+            contract_addr.clone(),
+            &register_msg,
+            &coins(instantiate_msg.deposit_tier1.u128(), NATIVE_DENOM),
+        )
+        .unwrap();
+
+        // Build 21 batches matching production payload structure
+        let batch_metadata = vec![
+            // Gateway 1: 12 batches
+            BatchInfo { batch_id: "batch-1768245621345-c6f60c37".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "b22254af00d894091755eec8bd50a0bcfb83633aed5d7323154850de5bc2722a".to_string() },
+            BatchInfo { batch_id: "batch-1768245626346-460e0c3e".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "8d227d7640f62a291adbad2b002a755e2a611c846885c5c6a33ced7595b9a95e".to_string() },
+            BatchInfo { batch_id: "batch-1768245631347-5afb1e5a".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "cd70e8d0f13beb8d62eb20589047d0256d5551f9bb917a76bd2b91fe5d92fcd5".to_string() },
+            BatchInfo { batch_id: "batch-1768245636347-500930fa".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "062efc63e9469f03d151d79096f58113c783787467d403a9d747c72ae3092a19".to_string() },
+            BatchInfo { batch_id: "batch-1768245641347-97c9a268".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "bd7a7856d31bea65f3db9a396990e65cf9a8512e191fc134268652c265549e1e".to_string() },
+            BatchInfo { batch_id: "batch-1768245646350-91409bca".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "23d65b9f4ca7701c144b9b9569543a73d42d86c4e7bbe19f05cb6461e242fe1a".to_string() },
+            BatchInfo { batch_id: "batch-1768245651350-472dfbc8".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "28c12c02973bb5d569fea44034f3e26ac4b4d521b77e48a07c8731bb8849eb39".to_string() },
+            BatchInfo { batch_id: "batch-1768245656352-ddd9d741".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "606b19cf80deebadbe17a5b24243e98cf806fc9bc36dadc269523a229cf60cac".to_string() },
+            BatchInfo { batch_id: "batch-1768245661353-be8ead6c".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "176fc29e6da1d82868203531b32f0ad4ebcf2d21a96677b5f425fb0a297784ab".to_string() },
+            BatchInfo { batch_id: "batch-1768245666355-ac828677".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "11e9cb449d5f91fb66b1197076a9babb1199a47a56d051b385741ee77dd26406".to_string() },
+            BatchInfo { batch_id: "batch-1768245671356-b9e5605b".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "39319004af7807df85ac14fd26f11792f7820b6fba29005b846101a072d3fd85".to_string() },
+            BatchInfo { batch_id: "batch-1768245676358-371f382d".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "cba7969c2428cacde1a2a2b99397799f764cdfae7df2647b451bb8133cfb51e4".to_string() },
+            // Gateway 3: 3 batches
+            BatchInfo { batch_id: "batch-1768245624806-bc4c0546".to_string(), gateway_did: r"did:c4e:gateway:test-gw3".to_string(), device_count: 14, snapshot_count: 14, batch_merkle_root: "78896cdc433130eaf5bfa19809ceff9fb0975b6fb8a993f91638fd6bb55c2264".to_string() },
+            BatchInfo { batch_id: "batch-1768245639807-68f397de".to_string(), gateway_did: r"did:c4e:gateway:test-gw3".to_string(), device_count: 14, snapshot_count: 14, batch_merkle_root: "4a856c6f1ea18dec74bd847f4bcf682cb29ef1d5cfd85a9d35691134eb367c2c".to_string() },
+            BatchInfo { batch_id: "batch-1768245669817-8a7b0272".to_string(), gateway_did: r"did:c4e:gateway:test-gw3".to_string(), device_count: 14, snapshot_count: 14, batch_merkle_root: "77d5d48b2b82ec8f82ad46de1a14619da3248222d713b6685a95d0e4d9778a9c".to_string() },
+            // Gateway 2: 6 batches
+            BatchInfo { batch_id: "batch-1768245627876-e18d8098".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "8fbe904d674ae8f772af45f859569e0f9c2e5cd50c93f6407bf6c27880185a45".to_string() },
+            BatchInfo { batch_id: "batch-1768245637877-a0d51b29".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "24718a64db6d1a55f3347989f445e27da230c8b0dd6b27302ab9c702628c275e".to_string() },
+            BatchInfo { batch_id: "batch-1768245647883-9fc58403".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "c231832c8ee2b6526294b09c79f36b65d144ca07c87028771eeb45e4026b64df".to_string() },
+            BatchInfo { batch_id: "batch-1768245657887-5074480f".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "bfc3f534f2af13a9ee2f8dcec9cc5eee39608a9e25102fd29bf1b71651415b01".to_string() },
+            BatchInfo { batch_id: "batch-1768245667887-0775c607".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "532cca7ba8145d5f816d2557cd0a3ea28787e7f9475b359a2973caa4d4740d97".to_string() },
+            BatchInfo { batch_id: "batch-1768245677893-834db962".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "1278a9833249bf41e92843ba2505a63184d1487226142467667bc97ae3dd0f74".to_string() },
+        ];
+
+        // Gateway metadata as metadata_json (not in contract schema)
+        let metadata_json = r#"{
+            "aggregation_strategy": "phase2_multi_gateway",
+            "worker_version": "0.2.0",
+            "gateway_count": 3,
+            "total_snapshot_count": 174,
+            "gateway_metadata": [
+                {"gateway_did": "did:c4e:gateway:test-gw1", "batch_count": 12, "snapshot_count": 72},
+                {"gateway_did": "did:c4e:gateway:test-gw3", "batch_count": 3, "snapshot_count": 42},
+                {"gateway_did": "did:c4e:gateway:test-gw2", "batch_count": 6, "snapshot_count": 60}
+            ]
+        }"#;
+
+        let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
+            worker_did: r"did:c4e:worker:detrack2".to_string(),
+            data_hash: "968a30bd6b874139315a6cc1c45ae7d837695e3de9aa1ee471f133cd4e3035bc".to_string(),
+            tw_start: Timestamp::from_nanos(1768245621344000000),
+            tw_end: Timestamp::from_nanos(1768245677893000000),
+            batch_metadata,
+            metadata_json: Some(metadata_json.to_string()),
+        });
+
+        let res = app
+            .execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[])
+            .unwrap();
+
+        // Verify event
+        let store_proof_event = res.events.iter().find(|e| e.ty == "wasm-store_proof").unwrap();
+        assert_eq!(
+            store_proof_event.attributes.iter().find(|a| a.key == "batch_count").unwrap().value,
+            "21"
+        );
+
+        // Query proof
+        let query_msg = QueryMsg::Proof { id: 0 };
+        let proof: ProofResponse = app.wrap().query_wasm_smart(contract_addr.clone(), &query_msg).unwrap();
+        assert_eq!(proof.batch_metadata.len(), 21);
+        assert_eq!(proof.worker_did, r"did:c4e:worker:detrack2");
+
+        // Verify all 3 gateways are indexed
+        let query_msg = QueryMsg::ProofsByGateway {
+            gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
+            start_after: None,
+            limit: None,
+        };
+        let proofs: ProofsResponse = app.wrap().query_wasm_smart(contract_addr.clone(), &query_msg).unwrap();
+        assert_eq!(proofs.proofs.len(), 1);
+
+        let query_msg = QueryMsg::ProofsByGateway {
+            gateway_did: r"did:c4e:gateway:test-gw2".to_string(),
+            start_after: None,
+            limit: None,
+        };
+        let proofs: ProofsResponse = app.wrap().query_wasm_smart(contract_addr.clone(), &query_msg).unwrap();
+        assert_eq!(proofs.proofs.len(), 1);
+
+        let query_msg = QueryMsg::ProofsByGateway {
+            gateway_did: r"did:c4e:gateway:test-gw3".to_string(),
+            start_after: None,
+            limit: None,
+        };
+        let proofs: ProofsResponse = app.wrap().query_wasm_smart(contract_addr, &query_msg).unwrap();
+        assert_eq!(proofs.proofs.len(), 1);
     }
 }

@@ -44,10 +44,10 @@ pub struct Proof {
     pub worker_did: String,
     /// The hash of the blockchain Merkle root (aggregates all batches)
     pub data_hash: String,
-    /// Start of time window (nanosecond timestamp as string)
-    pub tw_start: String,
-    /// End of time window (nanosecond timestamp as string)
-    pub tw_end: String,
+    /// Start of time window (CosmWasm Timestamp)
+    pub tw_start: Timestamp,
+    /// End of time window (CosmWasm Timestamp)
+    pub tw_end: Timestamp,
     /// Array of batch metadata (multi-batch aggregation)
     pub batch_metadata: Vec<BatchInfo>,
     /// Optional JSON string for additional, application-specific metadata related to the proof.
@@ -56,16 +56,6 @@ pub struct Proof {
     pub stored_at: Timestamp,
     /// Address of the node that stored this proof.
     pub stored_by: Addr,
-}
-
-#[cw_serde]
-pub struct User {
-    /// The user's blockchain address.
-    pub address: Addr,
-    /// A list of IDs of proofs associated with this user, typically as the data owner.
-    pub proofs: Vec<u64>,
-    /// Timestamp of when the user was first registered in the contract.
-    pub registered_at: Timestamp,
 }
 
 #[cw_serde]
@@ -143,10 +133,6 @@ pub const GATEWAY_PROOFS: Map<(&str, u64), ()> = Map::new("gateway_proofs");
 /// Provides an index to look up a proof ID (u64) by its data hash (String).
 /// This allows for quick checks of proof existence and retrieval by content hash.
 pub const PROOF_BY_HASH: Map<&str, u64> = Map::new("proof_by_hash");
-
-/// Stores user profiles, keyed by their address (Addr).
-/// Users are typically data owners associated with proofs.
-pub const USERS: Map<String, User> = Map::new("users");
 
 /// Stores information about registered nodes, keyed by their address (Addr).
 /// This is the primary registry for active nodes in the system.

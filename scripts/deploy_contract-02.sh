@@ -108,7 +108,7 @@ echo -e "\\n=== Action: $ACTION ==="
 if [ "$ACTION" == "store" ]; then
     # Step 5: Instantiate the contract
     echo -e "\\n=== 5. Instantiating Contract ==="
-    INIT_MSG='{"admin":"'$APP_ADMIN'","version":"'$DETRACK_SC_VERSION'","min_stake_tier1":"'$MIN_STAKE_TIER1'","min_stake_tier2":"'$MIN_STAKE_TIER2'","min_stake_tier3":"'$MIN_STAKE_TIER3'","deposit_tier1":"'$DEPOSIT_TIER1'","deposit_tier2":"'$DEPOSIT_TIER2'","deposit_tier3":"'$DEPOSIT_TIER3'","use_whitelist":'$USE_WHITELIST',"deposit_unlock_period_blocks":'$DEPOSIT_UNLOCK_PERIOD_BLOCKS'}'
+    INIT_MSG='{"admin":"'$APP_ADMIN'","did_contract_address":"'$DID_CONTRACT_ADDRESS'","version":"'$DETRACK_SC_VERSION'","min_stake_tier1":"'$MIN_STAKE_TIER1'","min_stake_tier2":"'$MIN_STAKE_TIER2'","min_stake_tier3":"'$MIN_STAKE_TIER3'","deposit_tier1":"'$DEPOSIT_TIER1'","deposit_tier2":"'$DEPOSIT_TIER2'","deposit_tier3":"'$DEPOSIT_TIER3'","use_whitelist":'$USE_WHITELIST',"deposit_unlock_period_blocks":'$DEPOSIT_UNLOCK_PERIOD_BLOCKS'}'
 
     echo "Initialization message:"
     echo "$INIT_MSG"

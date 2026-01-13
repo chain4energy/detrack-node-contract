@@ -71,4 +71,35 @@ pub enum ContractError {
 
     #[error("Node has insufficient deposit. Current: {current_deposit}, Required: {required_deposit} for tier {tier}")]
     NodeHasInsufficientDeposit { current_deposit: Uint128, required_deposit: Uint128, tier: u8 },
+
+    // ============================================================================
+    // Phase 1b: DID-Related Errors
+    // ============================================================================
+    
+    #[error("DID not found: {did}")]
+    DidNotFound { did: String },
+
+    #[error("Invalid DID format: {did}")]
+    InvalidDidFormat { did: String },
+
+    #[error("DID contract query failed: {reason}")]
+    DidContractQueryFailed { reason: String },
+
+    #[error("Empty batch metadata not allowed")]
+    EmptyBatchMetadata {},
+
+    #[error("Too many batches: {count} (max 100)")]
+    TooManyBatches { count: usize },
+
+    #[error("Invalid gateway DID in batch: {gateway_did}")]
+    InvalidGatewayDid { gateway_did: String },
+
+    #[error("Invalid worker DID: {worker_did}")]
+    InvalidWorkerDid { worker_did: String },
+
+    #[error("Invalid merkle root format: {root}")]
+    InvalidMerkleRoot { root: String },
+
+    #[error("Invalid timestamp format: {timestamp}")]
+    InvalidTimestamp { timestamp: String },
 }
