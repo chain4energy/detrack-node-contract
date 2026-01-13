@@ -22,8 +22,8 @@ echo "$NODE_INFO_CMD"
 
 c4ed --home $HOME_DIR query wasm contract-state smart $DETRACK_SMART_CONTRACT_ADDRESS \
   "$NODE_INFO_CMD" \
-  --chain-id $C4E_CHAIN_ID
-
+  --node "$C4E_RPC_ENDPOINT" \
+  --chain-id "$C4E_CHAIN_ID"
 # Test adding reputation to the node via admin
 echo -e "\n=== Testing Admin Update Node Reputation ==="
 
@@ -42,6 +42,7 @@ echo "$UPDATE_REP_CMD"
 c4ed --home $HOME_DIR tx wasm execute $DETRACK_SMART_CONTRACT_ADDRESS \
   "$UPDATE_REP_CMD" \
   --from $ADMIN_NAME \
+  --node "$C4E_RPC_ENDPOINT" \
   --chain-id $C4E_CHAIN_ID \
   --gas auto \
   --gas-adjustment 1.3 \
@@ -55,6 +56,7 @@ sleep 5
 echo -e "\n=== Checking Updated Reputation ==="
 c4ed --home $HOME_DIR query wasm contract-state smart $DETRACK_SMART_CONTRACT_ADDRESS \
   "$NODE_INFO_CMD" \
-  --chain-id $C4E_CHAIN_ID
+  --node "$C4E_RPC_ENDPOINT" \
+  --chain-id "$C4E_CHAIN_ID"
 
 echo -e "\n=== Testing Complete ==="

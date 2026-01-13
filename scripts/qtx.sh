@@ -100,7 +100,7 @@ fi
 
 # Execute the command and capture output
 STDERR_FILE=$(mktemp)
-TX_QUERY_RESULT=$(c4ed --home "$HOME_DIR" query tx "$TXHASH" --chain-id "$C4E_CHAIN_ID" -o json 2> "$STDERR_FILE")
+TX_QUERY_RESULT=$(c4ed --home "$HOME_DIR" query tx "$TXHASH" --node "$C4E_RPC_ENDPOINT" --chain-id "$C4E_CHAIN_ID" -o json 2> "$STDERR_FILE")
 EXIT_CODE=$?
 
 STDERR_OUTPUT=$(cat "$STDERR_FILE")

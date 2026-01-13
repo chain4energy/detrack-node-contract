@@ -1,27 +1,32 @@
 # DeTrack Node Contract - Roadmap to Variant C (DID-First Architecture)
 
-**Document Version**: 1.0  
-**Date**: 2026-01-01  
-**Status**: Planning Phase  
-**Target**: Phase 1b (DID-First Minimal Architecture)
+**Document Version**: 1.1  
+**Date**: 2026-01-13  
+**Status**: Phase 1b Complete ✅  
+**Current Version**: v0.3.2
 
 ---
 
 ## 📋 Executive Summary
 
-This roadmap describes the evolution of the DeTrack Node Contract from its current implementation (Phase 1a) to the target **Variant C (DID-First Minimal)** architecture. The migration introduces DID-based trust chain verification, removes redundant aggregation fields, and implements multi-batch proof aggregation.
+**Phase 1b COMPLETED** - The DeTrack Node Contract has successfully migrated to **Variant C (DID-First Minimal)** architecture with DID-based trust chain verification, multi-batch proof aggregation, and optimized storage.
 
-**Key Changes**:
-- ✅ Add DID-based identity verification (Worker DID, Gateway DID)
-- ✅ Replace single-proof model with multi-batch aggregation
-- ✅ Remove redundant/meaningless fields (data_owner, value_in/out, unit, batch_count, total_snapshots)
-- ✅ Add secondary indexes for efficient queries (by_gateway, by_worker)
-- ✅ Integrate with DID Contract for authorization
-- ✅ Prepare for Phase 2+ features (Device DID, NFT ownership)
+**Completed Features (v0.3.2)**:
+- ✅ DID-based identity verification (Worker DID, Gateway DID, Device DID)
+- ✅ Multi-batch proof aggregation (up to 100 batches per proof)
+- ✅ Removed redundant fields (data_owner, value_in/out, unit)
+- ✅ Secondary indexes for efficient queries (by_gateway, by_worker)
+- ✅ DID Contract integration for authorization
+- ✅ Configurable `max_batch_size` parameter (default: 100)
+- ✅ 22 comprehensive unit tests passing
+- ✅ Timestamp-based storage (optimized vs String)
 
-**Timeline**: 6-8 days (1 sprint)  
-**Breaking Changes**: YES - Full contract redeployment required  
-**Dependencies**: DID Contract must be deployed first
+**Current Deployment**:
+- Contract Address: `c4e17p9rzwnnfxcjp32un9ug7yhhzgtkhvl9jfksztgw5uh69wac2pgsn5kv43`
+- Code ID: Latest optimized build
+- DID Contract: `c4e14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s86dt7n`
+
+**Next Phase**: Integration testing, E2E validation, production deployment
 
 ---
 

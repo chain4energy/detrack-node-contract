@@ -341,7 +341,7 @@ pub fn store_proof(
         return Err(ContractError::EmptyBatchMetadata {});
     }
     
-    if batch_metadata.len() > 100 {
+    if batch_metadata.len() > config.max_batch_size as usize {
         return Err(ContractError::TooManyBatches { count: batch_metadata.len() });
     }
     

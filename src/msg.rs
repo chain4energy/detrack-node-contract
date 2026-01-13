@@ -34,6 +34,8 @@ pub struct InstantiateMsg {
     pub use_whitelist: bool,
     // Add deposit unlock period parameter
     pub deposit_unlock_period_blocks: u64,
+    /// Maximum number of batches that can be aggregated in a single proof (default: 100)
+    pub max_batch_size: u32,
 }
 
 /// Message type for admin operations
@@ -165,6 +167,7 @@ pub struct ConfigResponse {
     pub deposit_tier3: Uint128,
     pub use_whitelist: bool,
     pub deposit_unlock_period_blocks: u64,
+    pub max_batch_size: u32,
 }
 
 #[cw_serde]

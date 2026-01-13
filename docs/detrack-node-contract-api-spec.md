@@ -402,6 +402,20 @@ Stores a cryptographic proof of energy data on-chain.
 ```
 
 **Authorization**: Registered nodes with:
+- Operational tier (1-3)
+- Sufficient deposit for tier
+- Reputation >= `min_reputation_threshold`
+
+**Validation**:
+- Worker DID must be registered in DID Contract
+- All Gateway DIDs must be registered in DID Contract
+- `batch_metadata` not empty
+- `batch_metadata.len()` <= `max_batch_size` (default: 100)
+- `data_hash` must be 64 hex characters (SHA-256)
+- `data_hash` must be unique (not already stored)
+- DID format: `did:c4e:{type}:{identifier}`
+
+**Example**:
 - Reputation >= `min_reputation_threshold`
 - Operational tier (1-3)
 - Deposit >= tier requirement
@@ -680,10 +694,11 @@ Retrieves the contract's current configuration.
 ```json
 {
   "admin": "c4e1admin...",
-  "version": "0.1.0",
+  "version": "v0.3.2",
   "proof_count": 1234,
   "min_reputation_threshold": 0,
   "treasury": "c4e1treasury...",
+  "did_contract_address": "c4e14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s86dt7n",
   "min_stake_tier1": "1000000000",
   "min_stake_tier2": "5000000000",
   "min_stake_tier3": "10000000000",
@@ -691,7 +706,8 @@ Retrieves the contract's current configuration.
   "deposit_tier2": "200000000",
   "deposit_tier3": "300000000",
   "use_whitelist": false,
-  "deposit_unlock_period_blocks": 100800
+  "deposit_unlock_period_blocks": 100800,
+  "max_batch_size": 100
 }
 ```
 

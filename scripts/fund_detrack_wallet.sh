@@ -32,12 +32,17 @@ C4E_BIN=c4ed
 # Send 100000000uc4e (100 C4E) tokens from alice to the DeTrack wallet
 TX_RESULT=$(${C4E_BIN} tx bank send $ALICE_NAME $DETRACK1_NODE 100000000uc4e \
   --chain-id=${C4E_CHAIN_ID} \
+  --node=${C4E_RPC_ENDPOINT} \
   --gas=auto \
   --gas-adjustment=1.3 \
-  --broadcast-mode=block \
+  --broadcast-mode=sync \
   --keyring-backend=${KEYRING_BACKEND} \
+  --home=${HOME_DIR} \
   --yes \
   -o json)
+
+echo "Waiting for transaction to be included in a block..."
+sleep 5
 
 # Check if transfer was successful
 TX_HASH=$(echo $TX_RESULT | jq -r '.txhash')
@@ -49,7 +54,7 @@ if [ "$CODE" = "0" ]; then
   
   # Check the balance of the DeTrack wallet
   echo -e "\n${YELLOW}Checking DETRACK1_NODE balance...${NC}"
-  BALANCE=$(${C4E_BIN} query bank balances $DETRACK1_NODE --chain-id=${C4E_CHAIN_ID} -o json | jq -r '.balances[] | select(.denom=="uc4e") | .amount')
+  BALANCE=$(${C4E_BIN} query bank balances $DETRACK1_NODE --node=${C4E_RPC_ENDPOINT} --chain-id=${C4E_CHAIN_ID} -o json | jq -r '.balances[] | select(.denom=="uc4e") | .amount')
   
   if [ -n "$BALANCE" ]; then
     C4E_BALANCE=$(echo "scale=6; $BALANCE / 1000000" | bc)

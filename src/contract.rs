@@ -47,6 +47,7 @@ pub fn instantiate(
         deposit_tier3: msg.deposit_tier3,
         use_whitelist: msg.use_whitelist,
         deposit_unlock_period_blocks: msg.deposit_unlock_period_blocks,
+        max_batch_size: msg.max_batch_size,
     };
 
     CONFIG.save(deps.storage, &config)?;

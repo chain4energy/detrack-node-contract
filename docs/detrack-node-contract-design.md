@@ -578,8 +578,21 @@ Future testing should verify:
 Current version tracking:
 ```rust
 pub struct Config {
-    pub version: String,  // e.g., "0.1.0"
-    // ... other fields
+    pub admin: Addr,
+    pub version: String,  // e.g., "v0.3.2"
+    pub proof_count: u64,
+    pub min_reputation_threshold: i32,
+    pub treasury: Option<Addr>,
+    pub did_contract_address: Addr,  // Phase 1b
+    pub min_stake_tier1: Uint128,
+    pub min_stake_tier2: Uint128,
+    pub min_stake_tier3: Uint128,
+    pub deposit_tier1: Uint128,
+    pub deposit_tier2: Uint128,
+    pub deposit_tier3: Uint128,
+    pub use_whitelist: bool,
+    pub deposit_unlock_period_blocks: u64,
+    pub max_batch_size: u32,  // v0.3.2+
 }
 ```
 

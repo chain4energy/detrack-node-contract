@@ -34,6 +34,9 @@ pub struct Config {
     pub use_whitelist: bool,
     /// The duration in blocks for which a node's deposit remains locked after initiating an unlock, before it can be claimed.
     pub deposit_unlock_period_blocks: u64,
+    /// The maximum batch size (in number of snapshots) that a node can submit in a single proof.
+    /// This helps prevent excessively large proofs that could strain contract resources.
+    pub max_batch_size: u32,
 }
 
 #[cw_serde]

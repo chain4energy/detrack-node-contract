@@ -65,6 +65,7 @@ FULL_WASM_PATH=$(realpath "$OPTIMIZED_WASM")
 echo "Using WASM file at: $FULL_WASM_PATH"
 TX_RESULT=$(c4ed --home $HOME_DIR tx wasm store "$FULL_WASM_PATH" \
   --from "$ADMIN_NAME" \
+  --node "$C4E_RPC_ENDPOINT" \
   --chain-id "$C4E_CHAIN_ID" \
   --gas auto \
   --gas-adjustment 1.3 \
@@ -86,7 +87,7 @@ sleep 5
 
 # Step 4: Get the code ID
 echo -e "\n=== 4. Getting Code ID ==="
-CODE_QUERY=$(c4ed --home $HOME_DIR query tx "$TX_HASH" --chain-id "$C4E_CHAIN_ID" -o json)
+CODE_QUERY=$(c4ed --home $HOME_DIR query tx "$TX_HASH" --node "$C4E_RPC_ENDPOINT" --chain-id "$C4E_CHAIN_ID" -o json)
 
 if [ $? -ne 0 ]; then
   echo "Error: Failed to query transaction"
@@ -108,7 +109,7 @@ echo -e "\\n=== Action: $ACTION ==="
 if [ "$ACTION" == "store" ]; then
     # Step 5: Instantiate the contract
     echo -e "\\n=== 5. Instantiating Contract ==="
-    INIT_MSG='{"admin":"'$APP_ADMIN'","did_contract_address":"'$DID_CONTRACT_ADDRESS'","version":"'$DETRACK_SC_VERSION'","min_stake_tier1":"'$MIN_STAKE_TIER1'","min_stake_tier2":"'$MIN_STAKE_TIER2'","min_stake_tier3":"'$MIN_STAKE_TIER3'","deposit_tier1":"'$DEPOSIT_TIER1'","deposit_tier2":"'$DEPOSIT_TIER2'","deposit_tier3":"'$DEPOSIT_TIER3'","use_whitelist":'$USE_WHITELIST',"deposit_unlock_period_blocks":'$DEPOSIT_UNLOCK_PERIOD_BLOCKS'}'
+    INIT_MSG='{"admin":"'$APP_ADMIN'","did_contract_address":"'$DID_CONTRACT_ADDRESS'","version":"'$DETRACK_SC_VERSION'","min_stake_tier1":"'$MIN_STAKE_TIER1'","min_stake_tier2":"'$MIN_STAKE_TIER2'","min_stake_tier3":"'$MIN_STAKE_TIER3'","deposit_tier1":"'$DEPOSIT_TIER1'","deposit_tier2":"'$DEPOSIT_TIER2'","deposit_tier3":"'$DEPOSIT_TIER3'","use_whitelist":'$USE_WHITELIST',"deposit_unlock_period_blocks":'$DEPOSIT_UNLOCK_PERIOD_BLOCKS',"max_batch_size":'${MAX_BATCH_SIZE:-100}'}'
 
     echo "Initialization message:"
     echo "$INIT_MSG"
@@ -117,6 +118,7 @@ if [ "$ACTION" == "store" ]; then
       --label "$DETRACK_SC_LABEL" \
       --admin "$APP_ADMIN" \
       --from "$ADMIN_NAME" \
+      --node "$C4E_RPC_ENDPOINT" \
       --chain-id "$C4E_CHAIN_ID" \
       --gas auto \
       --gas-adjustment 1.3 \
@@ -137,7 +139,7 @@ if [ "$ACTION" == "store" ]; then
 
     # Step 6: Get the contract address
     echo -e "\\n=== 6. Getting Contract Address ==="
-    INIT_QUERY=$(c4ed --home $HOME_DIR query tx "$INIT_TX_HASH" --chain-id "$C4E_CHAIN_ID" -o json)
+    INIT_QUERY=$(c4ed --home $HOME_DIR query tx "$INIT_TX_HASH" --node "$C4E_RPC_ENDPOINT" --chain-id "$C4E_CHAIN_ID" -o json)
 
     if [ $? -ne 0 ]; then
       echo "Error: Failed to query instantiation transaction"
@@ -193,6 +195,7 @@ elif [ "$ACTION" == "migrate" ]; then
 
     MIGRATE_RESULT=$(c4ed --home $HOME_DIR tx wasm migrate "$EXISTING_CONTRACT_ADDR" "$CODE_ID" "$MIGRATE_MSG" \
       --from "$ADMIN_NAME" \
+      --node "$C4E_RPC_ENDPOINT" \
       --chain-id "$C4E_CHAIN_ID" \
       --gas auto \
       --gas-adjustment 1.3 \
@@ -214,7 +217,7 @@ elif [ "$ACTION" == "migrate" ]; then
 
     echo "Verifying migration..."
     QUERY_CONFIG_MSG='{"config":{}}'
-    UPDATED_CONFIG_QUERY_RESULT=$(c4ed --home $HOME_DIR query wasm contract-state smart "$EXISTING_CONTRACT_ADDR" "$QUERY_CONFIG_MSG" --chain-id "$C4E_CHAIN_ID" -o json 2>&1)
+    UPDATED_CONFIG_QUERY_RESULT=$(c4ed --home $HOME_DIR query wasm contract-state smart "$EXISTING_CONTRACT_ADDR" "$QUERY_CONFIG_MSG" --node "$C4E_RPC_ENDPOINT" --chain-id "$C4E_CHAIN_ID" -o json 2>&1)
     
     if [ $? -ne 0 ]; then
         echo "Error querying contract config after migration: $UPDATED_CONFIG_QUERY_RESULT"

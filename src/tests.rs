@@ -37,6 +37,7 @@ mod tests {
             deposit_tier3: Uint128::new(1000), // uc4e
             use_whitelist: true,
             deposit_unlock_period_blocks: 100,
+            max_batch_size: 100, // Default maximum batch size
         }
     }
 

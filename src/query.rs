@@ -29,6 +29,7 @@ pub fn config(deps: Deps) -> StdResult<ConfigResponse> {
         deposit_tier3: config.deposit_tier3,
         use_whitelist: config.use_whitelist,
         deposit_unlock_period_blocks: config.deposit_unlock_period_blocks,
+        max_batch_size: config.max_batch_size,
     })
 }
 

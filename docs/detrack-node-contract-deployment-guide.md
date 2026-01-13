@@ -213,7 +213,8 @@ Create `instantiate.json`:
 ```json
 {
   "admin": null,
-  "version": "0.1.0",
+  "version": "v0.3.2",
+  "did_contract_address": "c4e14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s86dt7n",
   "min_stake_tier1": "1000000000",
   "min_stake_tier2": "5000000000",
   "min_stake_tier3": "10000000000",
@@ -221,7 +222,8 @@ Create `instantiate.json`:
   "deposit_tier2": "200000000",
   "deposit_tier3": "300000000",
   "use_whitelist": false,
-  "deposit_unlock_period_blocks": 100800
+  "deposit_unlock_period_blocks": 100800,
+  "max_batch_size": 100
 }
 ```
 
@@ -233,6 +235,7 @@ Create `instantiate.json`:
 - `deposit_tier2`: 0.2 C4E (200,000,000 uc4e)
 - `deposit_tier3`: 0.3 C4E (300,000,000 uc4e)
 - `deposit_unlock_period_blocks`: 100,800 blocks (~7 days at 6s/block)
+- `max_batch_size`: 100 batches max per proof (prevents resource strain)
 
 #### Execute Instantiation
 
@@ -244,7 +247,7 @@ c4ed tx wasm instantiate $CODE_ID "$(cat instantiate.json)" \
   --gas auto \
   --gas-adjustment 1.3 \
   --no-admin \
-  --broadcast-mode block
+  --broadcast-mode sync
 
 # Extract contract address from output
 export CONTRACT_ADDRESS=<contract_address_from_response>
@@ -274,10 +277,11 @@ Expected response:
 ```json
 {
   "admin": "c4e1deployer...",
-  "version": "0.1.0",
+  "version": "v0.3.2",
   "proof_count": 0,
   "min_reputation_threshold": 0,
   "treasury": null,
+  "did_contract_address": "c4e14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s86dt7n",
   "min_stake_tier1": "1000000000",
   "min_stake_tier2": "5000000000",
   "min_stake_tier3": "10000000000",
@@ -285,6 +289,10 @@ Expected response:
   "deposit_tier2": "200000000",
   "deposit_tier3": "300000000",
   "use_whitelist": false,
+  "deposit_unlock_period_blocks": 100800,
+  "max_batch_size": 100
+}
+```
   "deposit_unlock_period_blocks": 100800
 }
 ```
