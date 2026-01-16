@@ -28,8 +28,6 @@ Cargo.lock
 .DS_Store
 Thumbs.db
 
-# Schema files (if generated dynamically)
-schema/*.json
 
 # Node-specific
 node_modules/
