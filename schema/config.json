@@ -15,8 +15,7 @@
     "min_stake_tier2",
     "min_stake_tier3",
     "proof_count",
-    "use_whitelist",
-    "version"
+    "use_whitelist"
   ],
   "properties": {
     "admin": {
@@ -120,10 +119,6 @@
     "use_whitelist": {
       "description": "If true, nodes must be explicitly whitelisted by the admin to register or operate. If false, nodes can register directly by meeting stake/deposit requirements.",
       "type": "boolean"
-    },
-    "version": {
-      "description": "The version of the contract.",
-      "type": "string"
     }
   },
   "additionalProperties": false,

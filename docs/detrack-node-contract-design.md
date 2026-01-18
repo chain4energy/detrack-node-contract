@@ -1,5 +1,26 @@
 # DeTrack Node Contract Design
 
+**Last Updated**: 2026-01-18  
+**API Version**: v0.3.3  
+**Status**: Phase 1b - Multi-batch aggregation with DID trust chain
+
+## Changelog
+
+### 2026-01-18 - Storage Architecture Upgrade (API v0.3.3)
+- ✅ **IndexedMap for Proofs**: Upgraded from `Map<u64, Proof>` to `IndexedMap` with worker_did secondary index
+- ✅ **GATEWAY_PROOFS Manual Index**: Added manual index for multi-gateway queries (supports 1-to-many relationship)
+- ✅ **Dual Data References**: Added `original_data_reference` at both proof and batch levels
+- ✅ **Removed device_count**: Simplified BatchInfo structure (device_count removed from batch metadata)
+- ✅ **Flexible Metadata**: Support for `metadata_json` at both proof and batch levels
+- 📚 **Documentation**: Added Storage Evolution section explaining indexing strategy and architectural decisions
+
+### Previous - Phase 1b Multi-batch Aggregation (API v0.3.2)
+- Multi-batch aggregation support (Vec<BatchInfo>)
+- DID trust chain (worker_did + gateway_did per batch)
+- Tiered staking system with deposit locking
+
+---
+
 ## Overview
 
 The DeTrack Node Contract is a CosmWasm smart contract that implements a decentralized proof verification and node management system for the Chain4Energy blockchain. It provides infrastructure for managing worker nodes that verify and store cryptographic proofs of energy data, implementing a tiered staking system with reputation management and deposit locking mechanisms.
@@ -56,12 +77,14 @@ WHITELISTED_NODES: Map<String, Node>
 - **Access Pattern**: Direct lookup by address
 
 ```rust
-PROOFS: Map<u64, Proof>
+proofs() -> IndexedMap<u64, Proof, ProofIndexes>
 ```
-- **Purpose**: Primary proof storage by sequential ID
+- **Purpose**: Primary proof storage by sequential ID with secondary indexes
 - **Key**: Proof ID (u64)
-- **Value**: Complete proof data including metadata and energy measurements
-- **Access Pattern**: Direct lookup, range queries for pagination
+- **Value**: Complete proof data including metadata and batch information
+- **Secondary Index**: worker_did (String) - enables efficient ProofsByWorker queries
+- **Access Pattern**: Direct lookup, range queries for pagination, indexed queries by worker DID
+- **Rationale**: Upgraded from simple Map to IndexedMap for efficient worker-specific queries
 
 ```rust
 PROOF_BY_HASH: Map<&str, u64>
@@ -72,12 +95,13 @@ PROOF_BY_HASH: Map<&str, u64>
 - **Access Pattern**: Fast proof existence checks and retrieval by hash
 
 ```rust
-USERS: Map<String, User>
+GATEWAY_PROOFS: Map<(&str, u64), ()>
 ```
-- **Purpose**: User profile storage
-- **Key**: User address (String)
-- **Value**: User data with proof ID list
-- **Access Pattern**: Direct lookup, batch loads for user proofs
+- **Purpose**: Manual secondary index for gateway_did queries (multi-gateway support)
+- **Key**: (gateway_did, proof_id) composite key
+- **Value**: () - empty tuple (membership checking only)
+- **Access Pattern**: ProofsByGateway queries, supports 1-to-many relationship
+- **Rationale**: Manual index required because one proof can reference multiple gateway DIDs (via batch_metadata). IndexedMap's MultiIndex cannot handle Vec<BatchInfo> where each batch has different gateway_did. This manual index is populated during proof storage by iterating batch_metadata.
 
 ```rust
 UNLOCKING_DEPOSITS: Map<String, UnlockingDeposit>
@@ -86,6 +110,69 @@ UNLOCKING_DEPOSITS: Map<String, UnlockingDeposit>
 - **Key**: Node address (String)
 - **Value**: Deposit amount and release block height
 - **Access Pattern**: Direct lookup, removed after claim
+
+### Storage Evolution & Indexing Strategy
+
+#### Why IndexedMap for Proofs?
+
+**Previous Architecture** (Simple Map):
+```rust
+PROOFS: Map<u64, Proof>
+```
+- ❌ No built-in indexes
+- ❌ ProofsByWorker requires full iteration
+- ❌ Inefficient for worker-specific queries
+
+**Current Architecture** (IndexedMap):
+```rust
+proofs() -> IndexedMap<u64, Proof, ProofIndexes>
+```
+- ✅ Built-in worker_did index (MultiIndex)
+- ✅ O(log n) queries by worker DID
+- ✅ Supports pagination for worker queries
+- ✅ Automatic index maintenance
+
+#### Why Manual GATEWAY_PROOFS Index?
+
+**Challenge**: One proof references multiple gateway DIDs
+```rust
+Proof {
+  batch_metadata: [
+    { gateway_did: "did:c4e:gateway:gw1", ... },  // Gateway 1
+    { gateway_did: "did:c4e:gateway:gw2", ... },  // Gateway 2  
+    { gateway_did: "did:c4e:gateway:gw3", ... },  // Gateway 3
+  ]
+}
+```
+
+**IndexedMap Limitation**: MultiIndex cannot handle 1-to-many relationships within Vec fields
+
+**Solution**: Manual index populated during proof storage:
+```rust
+// Store proof
+proofs().save(storage, proof_id, &proof)?;
+
+// Create gateway indexes
+for batch in &proof.batch_metadata {
+    GATEWAY_PROOFS.save(storage, (&batch.gateway_did, proof_id), &())?;
+}
+```
+
+**Query Pattern**:
+```rust
+// ProofsByGateway query
+let proof_ids: Vec<u64> = GATEWAY_PROOFS
+    .prefix(gateway_did)
+    .range(storage, None, None, Order::Ascending)
+    .map(|item| item.map(|((_gw, id), _)| id))
+    .collect()?;
+```
+
+**Benefits**:
+- ✅ Supports multi-gateway aggregation (Phase 1b/2)
+- ✅ Efficient gateway-specific queries
+- ✅ Scales with 100+ gateways per proof
+- ✅ Composite key (gateway_did, proof_id) prevents duplicates
 
 ### Design Patterns
 
@@ -190,14 +277,42 @@ Optimized for different access patterns:
 - Tracked per-node in state
 - Time-locked withdrawal with configurable unbonding period
 
-### 4. Proof Data Structure
+### 4. Proof Data Structure (API v0.3.3)
 
-**Decision**: Include energy-specific fields (tw_start, tw_end, value_in, value_out, unit)
+**Decision**: Multi-batch aggregation with DID trust chain and flexible metadata
+**Structure**:
+```rust
+pub struct Proof {
+    pub id: u64,
+    pub worker_did: String,              // W3C DID of Worker Node
+    pub data_hash: String,                // Blockchain Merkle root
+    pub tw_start: Timestamp,              // Time window start
+    pub tw_end: Timestamp,                // Time window end
+    pub stored_at: Timestamp,             // Storage timestamp
+    pub stored_by: Addr,                  // Node address
+    pub batch_metadata: Vec<BatchInfo>,   // Multi-batch aggregation
+    pub original_data_reference: Option<String>, // IPFS CID/URI for full data
+    pub metadata_json: Option<String>,    // Flexible JSON metadata
+}
+
+pub struct BatchInfo {
+    pub batch_id: String,                 // Unique batch identifier
+    pub gateway_did: String,              // W3C DID of Gateway
+    pub snapshot_count: u32,              // Measurements in batch
+    pub batch_merkle_root: String,        // Level 1 Merkle root
+    pub original_data_reference: Option<String>, // Per-batch data reference
+    pub metadata_json: Option<String>,    // Per-batch metadata
+}
+```
+
 **Rationale**:
-- Tailored for energy verification use case
-- Enables on-chain energy accounting
-- Supports future automated settlement
-- Maintains flexibility with optional fields and JSON metadata
+- **DID Trust Chain**: Complete verification path (worker_did + gateway_did per batch)
+- **Multi-batch aggregation**: Single proof covers multiple gateway batches (Phase 1b)
+- **Flexible metadata**: Both proof-level and batch-level metadata_json for extensions
+- **Dual data references**: Proof-level for aggregation, batch-level for individual batches
+- **Time windows**: CosmWasm Timestamp for consensus-verifiable timing
+- **IndexedMap support**: worker_did index for efficient queries, GATEWAY_PROOFS for gateway queries
+- **Simplified BatchInfo**: Removed `device_count` field - can be computed off-chain from batch data if needed, reduces on-chain storage and gas costs
 
 ### 5. Reputation Management
 
@@ -295,9 +410,11 @@ if PROOF_BY_HASH.has(deps.storage, &data_hash) {
 - No partial state changes
 
 **Index Synchronization**:
-- PROOF_BY_HASH updated atomically with PROOFS
-- User proof lists updated with proof creation
+- PROOF_BY_HASH updated atomically with proofs() IndexedMap
+- GATEWAY_PROOFS manual index populated for each batch in batch_metadata
+- worker_did index (built-in to IndexedMap) updated automatically
 - Node statistics updated with each action
+- All indexes maintained within single transaction (rollback on error)
 
 ## Data Flow
 
@@ -420,10 +537,12 @@ const MAX_LIMIT: u32 = 30;
 - Efficient integer keys for main maps
 
 ### 3. Off-Chain Data
-- Large proof data stored off-chain (IPFS, etc.)
+- Large proof data stored off-chain (IPFS, database, etc.)
 - Only hash and metadata on-chain
-- `original_data_reference` points to full data
-- `metadata_json` for additional structured data
+- **Proof-level** `original_data_reference`: Points to aggregated proof archive
+- **Batch-level** `original_data_reference` (in BatchInfo): Points to individual batch data
+- **Dual metadata**: `metadata_json` at both proof and batch levels for flexibility
+- **Example**: Proof reference → IPFS CID for full archive, Batch reference → Database ID for batch
 
 ## Extension Points
 
@@ -571,52 +690,6 @@ Future testing should verify:
 - [ ] Cross-contract integrations
 - [ ] Governance participation
 - [ ] Upgrade mechanisms
-
-## Migration Strategy
-
-### Contract Versioning
-Current version tracking:
-```rust
-pub struct Config {
-    pub admin: Addr,
-    pub version: String,  // e.g., "v0.3.2"
-    pub proof_count: u64,
-    pub min_reputation_threshold: i32,
-    pub treasury: Option<Addr>,
-    pub did_contract_address: Addr,  // Phase 1b
-    pub min_stake_tier1: Uint128,
-    pub min_stake_tier2: Uint128,
-    pub min_stake_tier3: Uint128,
-    pub deposit_tier1: Uint128,
-    pub deposit_tier2: Uint128,
-    pub deposit_tier3: Uint128,
-    pub use_whitelist: bool,
-    pub deposit_unlock_period_blocks: u64,
-    pub max_batch_size: u32,  // v0.3.2+
-}
-```
-
-### Future Migration Support
-Prepared for CosmWasm migrate functionality:
-```rust
-pub enum MigrateMsg {
-    Migrate { new_version: String },
-}
-```
-
-**Migration Considerations**:
-- State schema changes
-- New field additions
-- Storage key modifications
-- Backward compatibility
-- Data migration scripts
-
-### Rollback Strategy
-- Always deploy to testnet first
-- Monitor for 24-48 hours
-- Have previous version ready
-- Document rollback procedures
-- Maintain state backup scripts
 
 ## Conclusion
 

@@ -7,8 +7,6 @@ use crate::msg::BatchInfo;
 pub struct Config {
     /// The administrator of the contract, capable of performing privileged operations.
     pub admin: Addr,
-    /// The version of the contract.
-    pub version: String,
     /// A counter for the total number of proofs stored, used to assign unique IDs.
     pub proof_count: u64,
     /// The minimum reputation a node must have to perform certain actions (e.g., store proofs).
@@ -51,14 +49,17 @@ pub struct Proof {
     pub tw_start: Timestamp,
     /// End of time window (CosmWasm Timestamp)
     pub tw_end: Timestamp,
-    /// Array of batch metadata (multi-batch aggregation)
-    pub batch_metadata: Vec<BatchInfo>,
-    /// Optional JSON string for additional, application-specific metadata related to the proof.
-    pub metadata_json: Option<String>,
     /// Timestamp of when the proof was stored in the contract.
     pub stored_at: Timestamp,
     /// Address of the node that stored this proof.
     pub stored_by: Addr,
+
+    /// Array of batch metadata (multi-batch aggregation)
+    pub batch_metadata: Vec<BatchInfo>,
+    /// Optional reference (e.g., IPFS CID or URI) to the original full data used to generate the proof.
+    pub original_data_reference: Option<String>,
+    /// Optional JSON string for additional, application-specific metadata related to the proof.
+    pub metadata_json: Option<String>,
 }
 
 #[cw_serde]

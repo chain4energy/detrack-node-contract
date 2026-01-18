@@ -28,7 +28,6 @@ mod tests {
         InstantiateMsg {
             admin: Some(ADMIN.to_string()),
             did_contract_address: "c4e1qkphn8h2rnyqjjtfh8j8dtuqgh5cac57nq2286tsljducqp4lwfqvsysy0".to_string(),
-            version: "1.0.0".to_string(),
             min_stake_tier1: Uint128::new(1000),
             min_stake_tier2: Uint128::new(5000),
             min_stake_tier3: Uint128::new(10000),
@@ -86,7 +85,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(config_response.admin, Addr::unchecked(ADMIN));
-        assert_eq!(config_response.version, msg.version);
         assert_eq!(config_response.min_stake_tier1, msg.min_stake_tier1);
         assert_eq!(config_response.min_stake_tier2, msg.min_stake_tier2);
         assert_eq!(config_response.min_stake_tier3, msg.min_stake_tier3);
@@ -145,9 +143,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
         
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
@@ -156,6 +155,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000), // 2024-01-01 00:00:00 UTC
             tw_end: Timestamp::from_nanos(1704153600000000000),   // 2024-01-02 00:00:00 UTC
             batch_metadata,
+            original_data_reference: None,
             metadata_json: Some(r#"{"facility_id": "F123", "device_id": "D456"}"#.to_string()),
         });
 
@@ -315,9 +315,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-002".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw2".to_string(),
-            device_count: 3,
             snapshot_count: 6,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
         
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
@@ -326,6 +327,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -369,9 +371,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-003".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw3".to_string(),
-            device_count: 2,
             snapshot_count: 4,
             batch_merkle_root: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
         
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
@@ -380,6 +383,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
         let err_store = app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[]).unwrap_err();
@@ -581,6 +585,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: vec![], // EMPTY
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -618,9 +623,10 @@ mod tests {
             .map(|i| BatchInfo {
                 batch_id: format!("batch-{:03}", i),
                 gateway_did: format!("did:c4e:gateway:gw{}", i % 5),
-                device_count: 5,
                 snapshot_count: 10,
                 batch_merkle_root: format!("{:0<64}", format!("{:x}", i)),
+                original_data_reference: None,
+                metadata_json: None,
             })
             .collect();
 
@@ -630,6 +636,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -665,9 +672,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         // Test 1: Empty data_hash
@@ -677,6 +685,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -696,6 +705,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -715,6 +725,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -750,9 +761,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
@@ -761,6 +773,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -802,9 +815,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
@@ -813,6 +827,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -829,9 +844,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: "not-a-did".to_string(), // INVALID
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
@@ -840,6 +856,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -876,16 +893,18 @@ mod tests {
             BatchInfo {
                 batch_id: "batch-001".to_string(),
                 gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-                device_count: 5,
                 snapshot_count: 10,
                 batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
             },
             BatchInfo {
                 batch_id: "batch-002".to_string(),
                 gateway_did: r"did:c4e:gateway:test-gw2".to_string(),
-                device_count: 3,
                 snapshot_count: 8,
                 batch_merkle_root: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
             },
         ];
 
@@ -895,6 +914,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: Some(r#"{"test": "metadata"}"#.to_string()),
         });
 
@@ -958,16 +978,18 @@ mod tests {
             BatchInfo {
                 batch_id: "batch-001".to_string(),
                 gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-                device_count: 5,
                 snapshot_count: 10,
                 batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
             },
             BatchInfo {
                 batch_id: "batch-002".to_string(),
                 gateway_did: r"did:c4e:gateway:test-gw2".to_string(),
-                device_count: 3,
                 snapshot_count: 8,
                 batch_merkle_root: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
             },
         ];
 
@@ -977,6 +999,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: Some(r#"{"facility_id": "F123"}"#.to_string()),
         });
 
@@ -1055,29 +1078,29 @@ mod tests {
         // Build 21 batches matching production payload structure
         let batch_metadata = vec![
             // Gateway 1: 12 batches
-            BatchInfo { batch_id: "batch-1768245621345-c6f60c37".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "b22254af00d894091755eec8bd50a0bcfb83633aed5d7323154850de5bc2722a".to_string() },
-            BatchInfo { batch_id: "batch-1768245626346-460e0c3e".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "8d227d7640f62a291adbad2b002a755e2a611c846885c5c6a33ced7595b9a95e".to_string() },
-            BatchInfo { batch_id: "batch-1768245631347-5afb1e5a".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "cd70e8d0f13beb8d62eb20589047d0256d5551f9bb917a76bd2b91fe5d92fcd5".to_string() },
-            BatchInfo { batch_id: "batch-1768245636347-500930fa".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "062efc63e9469f03d151d79096f58113c783787467d403a9d747c72ae3092a19".to_string() },
-            BatchInfo { batch_id: "batch-1768245641347-97c9a268".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "bd7a7856d31bea65f3db9a396990e65cf9a8512e191fc134268652c265549e1e".to_string() },
-            BatchInfo { batch_id: "batch-1768245646350-91409bca".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "23d65b9f4ca7701c144b9b9569543a73d42d86c4e7bbe19f05cb6461e242fe1a".to_string() },
-            BatchInfo { batch_id: "batch-1768245651350-472dfbc8".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "28c12c02973bb5d569fea44034f3e26ac4b4d521b77e48a07c8731bb8849eb39".to_string() },
-            BatchInfo { batch_id: "batch-1768245656352-ddd9d741".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "606b19cf80deebadbe17a5b24243e98cf806fc9bc36dadc269523a229cf60cac".to_string() },
-            BatchInfo { batch_id: "batch-1768245661353-be8ead6c".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "176fc29e6da1d82868203531b32f0ad4ebcf2d21a96677b5f425fb0a297784ab".to_string() },
-            BatchInfo { batch_id: "batch-1768245666355-ac828677".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "11e9cb449d5f91fb66b1197076a9babb1199a47a56d051b385741ee77dd26406".to_string() },
-            BatchInfo { batch_id: "batch-1768245671356-b9e5605b".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "39319004af7807df85ac14fd26f11792f7820b6fba29005b846101a072d3fd85".to_string() },
-            BatchInfo { batch_id: "batch-1768245676358-371f382d".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), device_count: 6, snapshot_count: 6, batch_merkle_root: "cba7969c2428cacde1a2a2b99397799f764cdfae7df2647b451bb8133cfb51e4".to_string() },
+            BatchInfo { batch_id: "batch-1768245621345-c6f60c37".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "b22254af00d894091755eec8bd50a0bcfb83633aed5d7323154850de5bc2722a".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245626346-460e0c3e".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "8d227d7640f62a291adbad2b002a755e2a611c846885c5c6a33ced7595b9a95e".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245631347-5afb1e5a".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "cd70e8d0f13beb8d62eb20589047d0256d5551f9bb917a76bd2b91fe5d92fcd5".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245636347-500930fa".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "062efc63e9469f03d151d79096f58113c783787467d403a9d747c72ae3092a19".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245641347-97c9a268".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "bd7a7856d31bea65f3db9a396990e65cf9a8512e191fc134268652c265549e1e".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245646350-91409bca".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "23d65b9f4ca7701c144b9b9569543a73d42d86c4e7bbe19f05cb6461e242fe1a".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245651350-472dfbc8".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "28c12c02973bb5d569fea44034f3e26ac4b4d521b77e48a07c8731bb8849eb39".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245656352-ddd9d741".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "606b19cf80deebadbe17a5b24243e98cf806fc9bc36dadc269523a229cf60cac".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245661353-be8ead6c".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "176fc29e6da1d82868203531b32f0ad4ebcf2d21a96677b5f425fb0a297784ab".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245666355-ac828677".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "11e9cb449d5f91fb66b1197076a9babb1199a47a56d051b385741ee77dd26406".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245671356-b9e5605b".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "39319004af7807df85ac14fd26f11792f7820b6fba29005b846101a072d3fd85".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245676358-371f382d".to_string(), gateway_did: r"did:c4e:gateway:test-gw1".to_string(), snapshot_count: 6, batch_merkle_root: "cba7969c2428cacde1a2a2b99397799f764cdfae7df2647b451bb8133cfb51e4".to_string(), original_data_reference: None, metadata_json: None },
             // Gateway 3: 3 batches
-            BatchInfo { batch_id: "batch-1768245624806-bc4c0546".to_string(), gateway_did: r"did:c4e:gateway:test-gw3".to_string(), device_count: 14, snapshot_count: 14, batch_merkle_root: "78896cdc433130eaf5bfa19809ceff9fb0975b6fb8a993f91638fd6bb55c2264".to_string() },
-            BatchInfo { batch_id: "batch-1768245639807-68f397de".to_string(), gateway_did: r"did:c4e:gateway:test-gw3".to_string(), device_count: 14, snapshot_count: 14, batch_merkle_root: "4a856c6f1ea18dec74bd847f4bcf682cb29ef1d5cfd85a9d35691134eb367c2c".to_string() },
-            BatchInfo { batch_id: "batch-1768245669817-8a7b0272".to_string(), gateway_did: r"did:c4e:gateway:test-gw3".to_string(), device_count: 14, snapshot_count: 14, batch_merkle_root: "77d5d48b2b82ec8f82ad46de1a14619da3248222d713b6685a95d0e4d9778a9c".to_string() },
+            BatchInfo { batch_id: "batch-1768245624806-bc4c0546".to_string(), gateway_did: r"did:c4e:gateway:test-gw3".to_string(), snapshot_count: 14, batch_merkle_root: "78896cdc433130eaf5bfa19809ceff9fb0975b6fb8a993f91638fd6bb55c2264".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245639807-68f397de".to_string(), gateway_did: r"did:c4e:gateway:test-gw3".to_string(), snapshot_count: 14, batch_merkle_root: "4a856c6f1ea18dec74bd847f4bcf682cb29ef1d5cfd85a9d35691134eb367c2c".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245669817-8a7b0272".to_string(), gateway_did: r"did:c4e:gateway:test-gw3".to_string(), snapshot_count: 14, batch_merkle_root: "77d5d48b2b82ec8f82ad46de1a14619da3248222d713b6685a95d0e4d9778a9c".to_string(), original_data_reference: None, metadata_json: None },
             // Gateway 2: 6 batches
-            BatchInfo { batch_id: "batch-1768245627876-e18d8098".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "8fbe904d674ae8f772af45f859569e0f9c2e5cd50c93f6407bf6c27880185a45".to_string() },
-            BatchInfo { batch_id: "batch-1768245637877-a0d51b29".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "24718a64db6d1a55f3347989f445e27da230c8b0dd6b27302ab9c702628c275e".to_string() },
-            BatchInfo { batch_id: "batch-1768245647883-9fc58403".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "c231832c8ee2b6526294b09c79f36b65d144ca07c87028771eeb45e4026b64df".to_string() },
-            BatchInfo { batch_id: "batch-1768245657887-5074480f".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "bfc3f534f2af13a9ee2f8dcec9cc5eee39608a9e25102fd29bf1b71651415b01".to_string() },
-            BatchInfo { batch_id: "batch-1768245667887-0775c607".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "532cca7ba8145d5f816d2557cd0a3ea28787e7f9475b359a2973caa4d4740d97".to_string() },
-            BatchInfo { batch_id: "batch-1768245677893-834db962".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), device_count: 10, snapshot_count: 10, batch_merkle_root: "1278a9833249bf41e92843ba2505a63184d1487226142467667bc97ae3dd0f74".to_string() },
+            BatchInfo { batch_id: "batch-1768245627876-e18d8098".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), snapshot_count: 10, batch_merkle_root: "8fbe904d674ae8f772af45f859569e0f9c2e5cd50c93f6407bf6c27880185a45".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245637877-a0d51b29".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), snapshot_count: 10, batch_merkle_root: "24718a64db6d1a55f3347989f445e27da230c8b0dd6b27302ab9c702628c275e".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245647883-9fc58403".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), snapshot_count: 10, batch_merkle_root: "c231832c8ee2b6526294b09c79f36b65d144ca07c87028771eeb45e4026b64df".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245657887-5074480f".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), snapshot_count: 10, batch_merkle_root: "bfc3f534f2af13a9ee2f8dcec9cc5eee39608a9e25102fd29bf1b71651415b01".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245667887-0775c607".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), snapshot_count: 10, batch_merkle_root: "532cca7ba8145d5f816d2557cd0a3ea28787e7f9475b359a2973caa4d4740d97".to_string(), original_data_reference: None, metadata_json: None },
+            BatchInfo { batch_id: "batch-1768245677893-834db962".to_string(), gateway_did: r"did:c4e:gateway:test-gw2".to_string(), snapshot_count: 10, batch_merkle_root: "1278a9833249bf41e92843ba2505a63184d1487226142467667bc97ae3dd0f74".to_string(), original_data_reference: None, metadata_json: None },
         ];
 
         // Gateway metadata as metadata_json (not in contract schema)
@@ -1099,6 +1122,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1768245621344000000),
             tw_end: Timestamp::from_nanos(1768245677893000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: Some(metadata_json.to_string()),
         });
 
@@ -1171,9 +1195,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         // Test 1: Zero timestamp (epoch start)
@@ -1183,6 +1208,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(0),
             tw_end: Timestamp::from_nanos(1000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
         app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[])
@@ -1195,6 +1221,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704067200000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
         app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[])
@@ -1207,6 +1234,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(2524608000000000000), // 2050-01-01
             tw_end: Timestamp::from_nanos(2556144000000000000),   // 2051-01-01
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
         app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[])
@@ -1219,6 +1247,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000001000), // +1 microsecond
             tw_end: Timestamp::from_nanos(1704067200000002000),   // +2 microseconds
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
         app.execute_contract(Addr::unchecked(USER), contract_addr, &store_msg, &[])
@@ -1249,9 +1278,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         // tw_end < tw_start (reversed) - Currently ALLOWED
@@ -1261,6 +1291,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704153600000000000),
             tw_end: Timestamp::from_nanos(1704067200000000000), // BEFORE start
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -1295,9 +1326,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         // Test 1: Empty worker_did
@@ -1307,6 +1339,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
         let err = app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[]).unwrap_err();
@@ -1319,6 +1352,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
         let err = app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[]).unwrap_err();
@@ -1331,6 +1365,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
         let err = app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[]).unwrap_err();
@@ -1340,9 +1375,10 @@ mod tests {
         let invalid_batch = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: "did:c4e:worker:wrongtype".to_string(), // Should be gateway
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
             worker_did: r"did:c4e:worker:detrack1".to_string(),
@@ -1350,6 +1386,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: invalid_batch,
+            original_data_reference: None,
             metadata_json: None,
         });
         let err = app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[]).unwrap_err();
@@ -1362,6 +1399,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
         let err = app.execute_contract(Addr::unchecked(USER), contract_addr, &store_msg, &[]).unwrap_err();
@@ -1396,9 +1434,10 @@ mod tests {
             .map(|i| BatchInfo {
                 batch_id: format!("batch-{:03}", i),
                 gateway_did: format!("did:c4e:gateway:gw{}", i % 5),
-                device_count: 5,
                 snapshot_count: 10,
                 batch_merkle_root: format!("{:0<64}", format!("{:x}", i)),
+                original_data_reference: None,
+                metadata_json: None,
             })
             .collect();
 
@@ -1408,6 +1447,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -1449,9 +1489,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-single".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-            device_count: 100,
             snapshot_count: 500,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
@@ -1460,6 +1501,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -1470,16 +1512,18 @@ mod tests {
             BatchInfo {
                 batch_id: "batch-001".to_string(),
                 gateway_did: r"did:c4e:gateway:test-gw2".to_string(),
-                device_count: 10,
                 snapshot_count: 50,
                 batch_merkle_root: "1111111111111111111111111111111111111111111111111111111111111111".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
             },
             BatchInfo {
                 batch_id: "batch-002".to_string(),
                 gateway_did: r"did:c4e:gateway:test-gw2".to_string(),
-                device_count: 10,
                 snapshot_count: 50,
                 batch_merkle_root: "2222222222222222222222222222222222222222222222222222222222222222".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
             },
         ];
 
@@ -1489,6 +1533,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
 
@@ -1521,9 +1566,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         // Store 3 proofs with different timestamps
@@ -1534,6 +1580,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
         app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[]).unwrap();
@@ -1545,6 +1592,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1706745600000000000),
             tw_end: Timestamp::from_nanos(1706832000000000000),
             batch_metadata: batch_metadata.clone(),
+            original_data_reference: None,
             metadata_json: None,
         });
         app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[]).unwrap();
@@ -1556,6 +1604,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1709251200000000000),
             tw_end: Timestamp::from_nanos(1709337600000000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: None,
         });
         app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[]).unwrap();
@@ -1612,9 +1661,10 @@ mod tests {
         let batch_metadata1 = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
@@ -1623,6 +1673,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata: batch_metadata1,
+            original_data_reference: None,
             metadata_json: None,
         });
         app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[]).unwrap();
@@ -1630,9 +1681,10 @@ mod tests {
         let batch_metadata2 = vec![BatchInfo {
             batch_id: "batch-002".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw2".to_string(),
-            device_count: 3,
             snapshot_count: 8,
             batch_merkle_root: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
@@ -1641,6 +1693,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1706745600000000000),
             tw_end: Timestamp::from_nanos(1706832000000000000),
             batch_metadata: batch_metadata2,
+            original_data_reference: None,
             metadata_json: None,
         });
         app.execute_contract(Addr::unchecked(USER), contract_addr.clone(), &store_msg, &[]).unwrap();
@@ -1713,9 +1766,10 @@ mod tests {
         let batch_metadata = vec![BatchInfo {
             batch_id: "batch-001".to_string(),
             gateway_did: r"did:c4e:gateway:test-gw1".to_string(),
-            device_count: 5,
             snapshot_count: 10,
             batch_merkle_root: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            original_data_reference: None,
+            metadata_json: None,
         }];
 
         let store_msg = ExecuteMsg::Node(NodeExecuteMsg::StoreProof {
@@ -1724,6 +1778,7 @@ mod tests {
             tw_start: Timestamp::from_nanos(1704067200000000000),
             tw_end: Timestamp::from_nanos(1704153600000000000),
             batch_metadata,
+            original_data_reference: None,
             metadata_json: Some(r#"{"note": "Using real DID contract address"}"#.to_string()),
         });
 

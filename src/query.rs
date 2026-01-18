@@ -9,14 +9,14 @@ const DEFAULT_LIMIT: u32 = 10;
 const MAX_LIMIT: u32 = 30;
 
 /// Query contract config.
-/// Returns the current configuration of the smart contract, including admin, version,
+/// Returns the current configuration of the smart contract, including admin,
 /// proof count, reputation threshold, treasury address, and DID contract address.
+/// For contract version, use cw2::get_contract_version() query.
 pub fn config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     
     Ok(ConfigResponse {
         admin: config.admin.to_string(),
-        version: config.version,
         proof_count: config.proof_count,
         min_reputation_threshold: config.min_reputation_threshold,
         treasury: config.treasury.map(|addr| addr.to_string()),
@@ -45,6 +45,7 @@ pub fn proof(deps: Deps, id: u64) -> StdResult<ProofResponse> {
         tw_start: proof.tw_start,
         tw_end: proof.tw_end,
         batch_metadata: proof.batch_metadata,
+        original_data_reference: proof.original_data_reference,
         metadata_json: proof.metadata_json,
         stored_at: proof.stored_at,
         stored_by: proof.stored_by.to_string(),
@@ -80,6 +81,7 @@ pub fn query_proofs(
                 worker_did: proof.worker_did,
                 data_hash: proof.data_hash,
                 batch_metadata: proof.batch_metadata,
+                original_data_reference: proof.original_data_reference,
                 metadata_json: proof.metadata_json,
                 stored_at: proof.stored_at,
                 stored_by: proof.stored_by.to_string(),
@@ -115,6 +117,7 @@ pub fn query_proofs_by_worker(
                 worker_did: proof.worker_did,
                 data_hash: proof.data_hash,
                 batch_metadata: proof.batch_metadata,
+                original_data_reference: proof.original_data_reference,
                 metadata_json: proof.metadata_json,
                 stored_at: proof.stored_at,
                 stored_by: proof.stored_by.to_string(),
@@ -153,6 +156,7 @@ pub fn query_proofs_by_gateway(
             worker_did: proof.worker_did,
             data_hash: proof.data_hash,
             batch_metadata: proof.batch_metadata,
+            original_data_reference: proof.original_data_reference,
             metadata_json: proof.metadata_json,
             stored_at: proof.stored_at,
             stored_by: proof.stored_by.to_string(),

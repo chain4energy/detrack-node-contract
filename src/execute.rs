@@ -303,6 +303,7 @@ pub fn store_proof(
     tw_start: Timestamp,
     tw_end: Timestamp,
     batch_metadata: Vec<BatchInfo>,
+    original_data_reference: Option<String>,
     metadata_json: Option<String>,
 ) -> Result<Response, ContractError> {
     // Validate calling node
@@ -377,6 +378,7 @@ pub fn store_proof(
         tw_start,
         tw_end,
         batch_metadata: batch_metadata.clone(),
+        original_data_reference,
         metadata_json,
         stored_at: env.block.time,
         stored_by: info.sender.clone(),

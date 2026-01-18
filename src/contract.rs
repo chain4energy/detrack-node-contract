@@ -33,7 +33,6 @@ pub fn instantiate(
 
     let config = Config {
         admin,
-        version: msg.version,
         proof_count: 0,
         min_reputation_threshold: 0, // Default minimum reputation threshold
         treasury: None, // Initialize treasury as None
@@ -54,8 +53,8 @@ pub fn instantiate(
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
-        .add_attribute("admin", config.admin.to_string()) // Convert Addr to String for attribute
-        .add_attribute("version", config.version)
+        .add_attribute("admin", config.admin.to_string())
+        .add_attribute("version", CONTRACT_VERSION)
         .add_attribute("deposit_unlock_period_blocks", msg.deposit_unlock_period_blocks.to_string()))
 }
 
@@ -91,6 +90,7 @@ pub fn execute(
                 tw_start,
                 tw_end,
                 batch_metadata,
+                original_data_reference,
                 metadata_json,
             } => store_proof(
                 deps, 
@@ -101,6 +101,7 @@ pub fn execute(
                 tw_start,
                 tw_end,
                 batch_metadata,
+                original_data_reference,
                 metadata_json,
             ),
             NodeExecuteMsg::RegisterNode {} => register_node(deps, env, info),
@@ -138,24 +139,21 @@ pub fn query(
 }
 
 /// Handles contract migration.
-/// Allows updating the contract to a new version. Currently, it only updates the
-/// version string in the config. More complex migration logic can be added here if needed.
+/// Updates the contract to a new version using cw2 version management.
+/// Add custom migration logic here if state structure changes between versions.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(
     deps: DepsMut,
     _env: Env,
-    msg: MigrateMsg,
+    _msg: MigrateMsg,
 ) -> Result<Response, ContractError> {
-    match msg {
-        MigrateMsg::Migrate { new_version } => {
-            // Migration logic
-            let mut config = CONFIG.load(deps.storage)?;
-            config.version = new_version.clone();
-            CONFIG.save(deps.storage, &config)?;
-
-            Ok(Response::new()
-                .add_attribute("method", "migrate")
-                .add_attribute("new_version", new_version))
-        }
-    }
+    // Update contract version using cw2
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    
+    // TODO: Add state migration logic here if needed
+    // Example: If Config structure changed, load old config and save new format
+    
+    Ok(Response::new()
+        .add_attribute("method", "migrate")
+        .add_attribute("version", CONTRACT_VERSION))
 }

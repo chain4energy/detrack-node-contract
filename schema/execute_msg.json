@@ -180,7 +180,6 @@
       "required": [
         "batch_id",
         "batch_merkle_root",
-        "device_count",
         "gateway_did",
         "snapshot_count"
       ],
@@ -193,15 +192,23 @@
           "description": "SHA-256 Merkle root of this batch",
           "type": "string"
         },
-        "device_count": {
-          "description": "Number of devices in this batch",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
         "gateway_did": {
           "description": "W3C DID of gateway that submitted this batch",
           "type": "string"
+        },
+        "metadata_json": {
+          "description": "Optional JSON string for additional, application-specific metadata related to the proof.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "original_data_reference": {
+          "description": "Optional reference (e.g., IPFS CID, DB ID, or URI) to the original full data for this batch",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "snapshot_count": {
           "description": "Total snapshots aggregated in this batch",
@@ -245,6 +252,13 @@
                 },
                 "metadata_json": {
                   "description": "Optional JSON metadata for additional information",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "original_data_reference": {
+                  "description": "Optional reference (e.g., IPFS CID or URI) to the original full data used to generate the proof.",
                   "type": [
                     "string",
                     "null"

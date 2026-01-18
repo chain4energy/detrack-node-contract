@@ -63,16 +63,77 @@ echo -e "\n=== 3. Storing Contract on Blockchain ==="
 # Use absolute path for the WASM file
 FULL_WASM_PATH=$(realpath "$OPTIMIZED_WASM")
 echo "Using WASM file at: $FULL_WASM_PATH"
-TX_RESULT=$(c4ed --home $HOME_DIR tx wasm store "$FULL_WASM_PATH" \
-  --from "$ADMIN_NAME" \
-  --node "$C4E_RPC_ENDPOINT" \
-  --chain-id "$C4E_CHAIN_ID" \
-  --gas auto \
-  --gas-adjustment 1.3 \
-  --broadcast-mode sync \
-  -y)
 
-echo "$TX_RESULT"
+# Retry logic for sequence mismatch
+MAX_RETRIES=3
+RETRY_COUNT=0
+TX_SUCCESS=false
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$TX_SUCCESS" = false ]; do
+  if [ $RETRY_COUNT -gt 0 ]; then
+    echo "Retrying transaction (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)..."
+    echo "Waiting 15 seconds for sequence to sync..."
+    sleep 15
+  fi
+  
+  # Use broadcast-mode sync (block not supported)
+  TX_RESULT=$(c4ed --home $HOME_DIR tx wasm store "$FULL_WASM_PATH" \
+    --from "$ADMIN_NAME" \
+    --node "$C4E_RPC_ENDPOINT" \
+    --chain-id "$C4E_CHAIN_ID" \
+    --gas auto \
+    --gas-adjustment 1.3 \
+    --broadcast-mode sync \
+    -y 2>&1)
+
+  echo "$TX_RESULT"
+
+  # Check for sequence mismatch
+  if echo "$TX_RESULT" | grep -q "account sequence mismatch"; then
+    echo "Sequence mismatch detected, will retry..."
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    continue
+  fi
+  
+  # Check for other errors
+  if echo "$TX_RESULT" | grep -qE "Error:|error:"; then
+    echo "Error: Transaction failed!"
+    exit 1
+  fi
+  
+  # Extract transaction hash
+  TX_HASH=$(echo "$TX_RESULT" | grep -oP '(?<=txhash: ).*')
+  if [ -z "$TX_HASH" ]; then
+    echo "Error: Failed to extract transaction hash"
+    exit 1
+  fi
+  
+  echo "Transaction hash: $TX_HASH"
+  echo "Waiting for transaction to be included in a block..."
+  sleep 8
+  
+  # Verify transaction was successful
+  TX_QUERY=$(c4ed --home $HOME_DIR query tx "$TX_HASH" --node "$C4E_RPC_ENDPOINT" --chain-id "$C4E_CHAIN_ID" -o json 2>&1)
+  
+  if [ $? -eq 0 ]; then
+    TX_CODE=$(echo "$TX_QUERY" | jq -r '.code // 0')
+    if [ "$TX_CODE" = "0" ]; then
+      echo "Transaction successful!"
+      TX_SUCCESS=true
+    else
+      echo "Error: Transaction failed with code $TX_CODE"
+      exit 1
+    fi
+  else
+    echo "Warning: Could not verify transaction, assuming success..."
+    TX_SUCCESS=true
+  fi
+done
+
+if [ "$TX_SUCCESS" = false ]; then
+  echo "Error: Transaction failed after $MAX_RETRIES attempts"
+  exit 1
+fi
 
 # Extract the transaction hash from the result
 TX_HASH=$(echo "$TX_RESULT" | grep -oP '(?<=txhash: ).*')
@@ -82,11 +143,11 @@ if [ -z "$TX_HASH" ]; then
 fi
 
 echo "Transaction hash: $TX_HASH"
-echo "Waiting for transaction to be included in a block..."
-sleep 5
 
 # Step 4: Get the code ID
 echo -e "\n=== 4. Getting Code ID ==="
+
+# Query transaction to get code ID
 CODE_QUERY=$(c4ed --home $HOME_DIR query tx "$TX_HASH" --node "$C4E_RPC_ENDPOINT" --chain-id "$C4E_CHAIN_ID" -o json)
 
 if [ $? -ne 0 ]; then
@@ -109,7 +170,7 @@ echo -e "\\n=== Action: $ACTION ==="
 if [ "$ACTION" == "store" ]; then
     # Step 5: Instantiate the contract
     echo -e "\\n=== 5. Instantiating Contract ==="
-    INIT_MSG='{"admin":"'$APP_ADMIN'","did_contract_address":"'$DID_CONTRACT_ADDRESS'","version":"'$DETRACK_SC_VERSION'","min_stake_tier1":"'$MIN_STAKE_TIER1'","min_stake_tier2":"'$MIN_STAKE_TIER2'","min_stake_tier3":"'$MIN_STAKE_TIER3'","deposit_tier1":"'$DEPOSIT_TIER1'","deposit_tier2":"'$DEPOSIT_TIER2'","deposit_tier3":"'$DEPOSIT_TIER3'","use_whitelist":'$USE_WHITELIST',"deposit_unlock_period_blocks":'$DEPOSIT_UNLOCK_PERIOD_BLOCKS',"max_batch_size":'${MAX_BATCH_SIZE:-100}'}'
+    INIT_MSG='{"admin":"'$APP_ADMIN'","did_contract_address":"'$DID_CONTRACT_ADDRESS'","min_stake_tier1":"'$MIN_STAKE_TIER1'","min_stake_tier2":"'$MIN_STAKE_TIER2'","min_stake_tier3":"'$MIN_STAKE_TIER3'","deposit_tier1":"'$DEPOSIT_TIER1'","deposit_tier2":"'$DEPOSIT_TIER2'","deposit_tier3":"'$DEPOSIT_TIER3'","use_whitelist":'$USE_WHITELIST',"deposit_unlock_period_blocks":'$DEPOSIT_UNLOCK_PERIOD_BLOCKS',"max_batch_size":'${MAX_BATCH_SIZE:-100}'}'
 
     echo "Initialization message:"
     echo "$INIT_MSG"
@@ -135,10 +196,12 @@ if [ "$ACTION" == "store" ]; then
 
     echo "Instantiation transaction hash: $INIT_TX_HASH"
     echo "Waiting for transaction to be included in a block..."
-    sleep 5
+    sleep 8
 
     # Step 6: Get the contract address
     echo -e "\\n=== 6. Getting Contract Address ==="
+    
+    # Query transaction to get contract address
     INIT_QUERY=$(c4ed --home $HOME_DIR query tx "$INIT_TX_HASH" --node "$C4E_RPC_ENDPOINT" --chain-id "$C4E_CHAIN_ID" -o json)
 
     if [ $? -ne 0 ]; then
@@ -187,9 +250,8 @@ elif [ "$ACTION" == "migrate" ]; then
     echo "Migrating existing contract at address: $EXISTING_CONTRACT_ADDR"
     echo "Using new code ID for migration: $CODE_ID"
 
-    #MIGRATE_MSG="{\\"new_version\\":\\"$DETRACK_SC_VERSION\\"}" # Corrected MIGRATE_MSG
-    #MIGRATE_MSG="{\\\"new_version\\\":\\\"$DETRACK_SC_VERSION\\\"}"
-    MIGRATE_MSG="{\"migrate\":{\"new_version\":\"$DETRACK_SC_VERSION\"}}"
+    # MigrateMsg is now an empty struct - version is managed by cw2
+    MIGRATE_MSG="{}"
     echo "Migration message:"
     echo "$MIGRATE_MSG"
 
@@ -203,6 +265,7 @@ elif [ "$ACTION" == "migrate" ]; then
       -y)
     
     echo "$MIGRATE_RESULT"
+    
     MIGRATE_TX_HASH=$(echo "$MIGRATE_RESULT" | grep -oP '(?<=txhash: ).*')
     if [ -z "$MIGRATE_TX_HASH" ]; then
       echo "Error: Failed to extract migration transaction hash. Migration might have failed."
@@ -213,7 +276,7 @@ elif [ "$ACTION" == "migrate" ]; then
     fi
     echo "Migration transaction hash: $MIGRATE_TX_HASH"
     echo "Waiting for migration transaction to be included in a block..."
-    sleep 5
+    sleep 8
 
     echo "Verifying migration..."
     QUERY_CONFIG_MSG='{"config":{}}'
@@ -221,18 +284,13 @@ elif [ "$ACTION" == "migrate" ]; then
     
     if [ $? -ne 0 ]; then
         echo "Error querying contract config after migration: $UPDATED_CONFIG_QUERY_RESULT"
-        echo "Migration transaction was sent, but verification of new config failed."
+        echo "Migration transaction was sent, but verification failed."
     else
-        echo "Updated contract config query result: $UPDATED_CONFIG_QUERY_RESULT"
-        ACTUAL_NEW_VERSION=$(echo "$UPDATED_CONFIG_QUERY_RESULT" | jq -r '.data.version') 
-        
-        if [ "$ACTUAL_NEW_VERSION" == "$DETRACK_SC_VERSION" ]; then
-            echo "Contract migration successful. Version updated to $ACTUAL_NEW_VERSION."
-        else
-            echo "Warning: Contract migration transaction submitted, but version verification failed or did not match."
-            echo "Expected version: $DETRACK_SC_VERSION, Got from query: $ACTUAL_NEW_VERSION (using path .data.version)"
-            echo "Please verify the contract state manually."
-        fi
+        echo "Migration successful! Contract config query result:"
+        echo "$UPDATED_CONFIG_QUERY_RESULT" | jq '.data'
+        echo ""
+        echo "Note: Contract version is now managed by cw2."
+        echo "To query version, use: c4ed query wasm contract $EXISTING_CONTRACT_ADDR"
     fi
     FINAL_CONTRACT_ADDR="$EXISTING_CONTRACT_ADDR"
 else

@@ -1,5 +1,7 @@
 # DeTrack Node Contract API Specification
 
+**API Version**: v0.3.3
+
 ## Overview
 
 This document provides a comprehensive API reference for the DeTrack Node Contract. The contract implements a decentralized node management and proof verification system for energy data on the Chain4Energy blockchain.
@@ -15,7 +17,8 @@ The contract requires configuration parameters for the tiered node system and de
 ```json
 {
   "admin": "c4e1admin...",
-  "version": "0.1.0",
+  "version": "v0.3.3",
+  "did_contract_address": "c4e14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s86dt7n",
   "min_stake_tier1": "1000000000",
   "min_stake_tier2": "5000000000",
   "min_stake_tier3": "10000000000",
@@ -29,7 +32,8 @@ The contract requires configuration parameters for the tiered node system and de
 
 #### Parameters
 - `admin` (optional, string): Admin address. If null, instantiator becomes admin
-- `version` (string): Contract version identifier
+- `version` (string): Contract version identifier (e.g., "v0.3.3")
+- `did_contract_address` (string): Address of the DID contract for identity verification
 - `min_stake_tier1` (Uint128): Minimum native stake for Tier 1 nodes
 - `min_stake_tier2` (Uint128): Minimum native stake for Tier 2 nodes
 - `min_stake_tier3` (Uint128): Minimum native stake for Tier 3 nodes
@@ -38,13 +42,15 @@ The contract requires configuration parameters for the tiered node system and de
 - `deposit_tier3` (Uint128): Required contract deposit for Tier 3
 - `use_whitelist` (bool): Whether nodes must be admin-whitelisted before registration
 - `deposit_unlock_period_blocks` (u64): Unbonding period in blocks (e.g., 100800 ≈ 7 days)
+- `max_batch_size` (u32): Maximum number of batches per proof (default: 100)
 
 #### Example
 
 ```bash
 c4ed tx wasm instantiate <code_id> '{
   "admin": null,
-  "version": "0.1.0",
+  "version": "v0.3.3",
+  "did_contract_address": "c4e14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s86dt7n",
   "min_stake_tier1": "1000000000",
   "min_stake_tier2": "5000000000",
   "min_stake_tier3": "10000000000",
@@ -381,21 +387,28 @@ c4ed tx wasm execute <contract_addr> '{
 
 #### 2. Store Proof
 
-Stores a cryptographic proof of energy data on-chain.
+Stores a cryptographic proof of energy data on-chain. Supports multi-batch aggregation (Phase 1b).
 
 ```json
 {
   "node": {
     "store_proof": {
-      "data_hash": "0xabc123...",
-      "original_data_reference": "ipfs://Qm...",
-      "data_owner": "c4e1owner...",
-      "metadata_json": "{\"device_id\":\"meter-001\"}",
-      "tw_start": "2024-11-01T00:00:00Z",
-      "tw_end": "2024-11-01T01:00:00Z",
-      "value_in": "1500000",
-      "value_out": "1200000",
-      "unit": "Wh"
+      "worker_did": "did:c4e:worker:abc123",
+      "data_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tw_start": "1698796800000000000",
+      "tw_end": "1698800400000000000",
+      "batch_metadata": [
+        {
+          "batch_id": "batch-001",
+          "gateway_did": "did:c4e:gateway:xyz789",
+          "snapshot_count": 12,
+          "batch_merkle_root": "d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6",
+          "original_data_reference": "ipfs://QmBatchData001",
+          "metadata_json": "{\"location\":\"Building-A\"}"
+        }
+      ],
+      "original_data_reference": "ipfs://QmProofData",
+      "metadata_json": "{\"aggregation_level\":\"multi-batch\"}"
     }
   }
 }
@@ -408,49 +421,61 @@ Stores a cryptographic proof of energy data on-chain.
 
 **Validation**:
 - Worker DID must be registered in DID Contract
-- All Gateway DIDs must be registered in DID Contract
-- `batch_metadata` not empty
-- `batch_metadata.len()` <= `max_batch_size` (default: 100)
-- `data_hash` must be 64 hex characters (SHA-256)
+- All Gateway DIDs in `batch_metadata` must be registered in DID Contract
+- `batch_metadata` must not be empty
+- `batch_metadata.len()` must be <= `max_batch_size` (default: 100)
+- `data_hash` must be 64 hex characters (SHA-256 hash)
 - `data_hash` must be unique (not already stored)
 - DID format: `did:c4e:{type}:{identifier}`
-
-**Example**:
-- Reputation >= `min_reputation_threshold`
-- Operational tier (1-3)
-- Deposit >= tier requirement
+- Node must have:
+  - Operational tier (1-3)
+  - Sufficient deposit for tier
+  - Reputation >= `min_reputation_threshold`
 
 **Parameters**:
-- `data_hash` (string): SHA-256 or similar hash of energy data (required, non-empty)
-- `original_data_reference` (optional, string): Reference to full data (e.g., IPFS CID)
-- `data_owner` (optional, string): Address of data owner (defaults to sender)
-- `metadata_json` (optional, string): Additional JSON metadata
-- `tw_start` (Timestamp): Time window start for energy measurement
-- `tw_end` (Timestamp): Time window end for energy measurement
-- `value_in` (optional, Uint128): Energy input value in specified units
-- `value_out` (optional, Uint128): Energy output value in specified units
-- `unit` (string): Unit of measurement (e.g., "Wh", "kWh")
-
-**Validation**:
-- `data_hash` must be non-empty
-- No duplicate proofs (hash must be unique)
-- `data_owner` must be valid address if provided
-- Node must meet reputation and deposit requirements
+- `worker_did` (string): W3C DID of the Worker Node storing this proof (format: `did:c4e:worker:{id}`)
+- `data_hash` (string): SHA-256 hash of blockchain Merkle root (aggregates all batches, 64 hex chars)
+- `tw_start` (Timestamp): Time window start for energy measurement (nanoseconds since epoch)
+- `tw_end` (Timestamp): Time window end for energy measurement (nanoseconds since epoch)
+- `batch_metadata` (array): Array of batch information (1-100 batches per proof)
+  - `batch_id` (string): Unique batch identifier (UUID or gateway-generated)
+  - `gateway_did` (string): W3C DID of gateway that submitted this batch
+  - `snapshot_count` (u32): Total snapshots aggregated in this batch
+  - `batch_merkle_root` (string): SHA-256 Merkle root of this batch (64 hex chars)
+  - `original_data_reference` (optional, string): Reference to batch data (IPFS CID, URI, etc.)
+  - `metadata_json` (optional, string): Additional batch metadata (JSON string)
+- `original_data_reference` (optional, string): Reference to proof-level data (e.g., IPFS CID)
+- `metadata_json` (optional, string): Additional proof-level metadata (JSON string)
 
 **Example**:
 ```bash
 c4ed tx wasm execute <contract_addr> '{
   "node": {
     "store_proof": {
-      "data_hash": "0xabc123def456...",
-      "original_data_reference": "ipfs://QmXyz789...",
-      "data_owner": "c4e1homeowner...",
-      "metadata_json": "{\"device_id\":\"smart-meter-001\",\"location\":\"Building-A\"}",
+      "worker_did": "did:c4e:worker:node123",
+      "data_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tw_start": "1698796800000000000",
       "tw_end": "1698800400000000000",
-      "value_in": "1500000",
-      "value_out": "1200000",
-      "unit": "Wh"
+      "batch_metadata": [
+        {
+          "batch_id": "batch-001",
+          "gateway_did": "did:c4e:gateway:gw001",
+          "snapshot_count": 12,
+          "batch_merkle_root": "d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6",
+          "original_data_reference": "ipfs://QmBatchData001",
+          "metadata_json": "{\"location\":\"Building-A\"}"
+        },
+        {
+          "batch_id": "batch-002",
+          "gateway_did": "did:c4e:gateway:gw002",
+          "snapshot_count": 8,
+          "batch_merkle_root": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+          "original_data_reference": "ipfs://QmBatchData002",
+          "metadata_json": "{\"location\":\"Building-B\"}"
+        }
+      ],
+      "original_data_reference": "ipfs://QmProofData",
+      "metadata_json": "{\"aggregation_level\":\"multi-batch\",\"total_gateways\":2}"
     }
   }
 }' --from node_operator --gas auto
@@ -463,9 +488,10 @@ c4ed tx wasm execute <contract_addr> '{
   "attributes": [
     {"key": "action", "value": "store_proof"},
     {"key": "proof_id", "value": "42"},
-    {"key": "data_hash", "value": "0xabc123def456..."},
+    {"key": "data_hash", "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
     {"key": "stored_by", "value": "c4e1node..."},
-    {"key": "data_owner", "value": "c4e1homeowner..."}
+    {"key": "worker_did", "value": "did:c4e:worker:node123"},
+    {"key": "batch_count", "value": "2"}
   ]
 }
 ```
@@ -475,9 +501,12 @@ c4ed tx wasm execute <contract_addr> '{
 - `InsufficientNodeReputation`: Reputation below threshold
 - `NodeTierNotOperational`: Node tier is 0 (not operational)
 - `NodeHasInsufficientDeposit`: Deposit below tier requirement
-- `InvalidInput`: Data hash is empty
+- `InvalidInput`: Data hash is empty or invalid format
 - `ProofAlreadyExists`: Proof with same hash already exists
-- `InvalidDataOwner`: Invalid data owner address
+- `BatchMetadataEmpty`: `batch_metadata` array is empty
+- `BatchSizeExceedsLimit`: Too many batches (> `max_batch_size`)
+- `DidNotRegistered`: Worker DID or Gateway DID not found in DID Contract
+- `InvalidHashFormat`: Hash is not 64 hex characters
 
 #### 3. Verify Proof
 
@@ -732,17 +761,24 @@ Retrieves a specific proof by its sequential ID.
 ```json
 {
   "id": 42,
-  "data_hash": "0xabc123def456...",
-  "original_data_reference": "ipfs://QmXyz789...",
-  "data_owner": "c4e1homeowner...",
-  "metadata_json": "{\"device_id\":\"smart-meter-001\"}",
-  "stored_at": "1698800400000000000",
-  "stored_by": "c4e1node...",
+  "worker_did": "did:c4e:worker:node123",
+  "data_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "tw_start": "1698796800000000000",
   "tw_end": "1698800400000000000",
-  "value_in": "1500000",
-  "value_out": "1200000",
-  "unit": "Wh"
+  "batch_metadata": [
+    {
+      "batch_id": "batch-001",
+      "gateway_did": "did:c4e:gateway:gw001",
+      "snapshot_count": 12,
+      "batch_merkle_root": "d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6",
+      "original_data_reference": "ipfs://QmBatchData001",
+      "metadata_json": "{\"location\":\"Building-A\"}"
+    }
+  ],
+  "original_data_reference": "ipfs://QmProofData",
+  "metadata_json": "{\"aggregation_level\":\"multi-batch\"}",
+  "stored_at": "1698800400000000000",
+  "stored_by": "c4e1node..."
 }
 ```
 
@@ -805,15 +841,19 @@ Lists proofs with pagination support.
   "proofs": [
     {
       "id": 41,
-      "data_hash": "0xdef...",
+      "worker_did": "did:c4e:worker:node1",
+      "data_hash": "d5e6f7a8...",
       "stored_by": "c4e1node1...",
-      ...
+      "stored_at": "1698800400000000000",
+      "batch_metadata": [...]
     },
     {
       "id": 42,
-      "data_hash": "0xabc...",
+      "worker_did": "did:c4e:worker:node2",
+      "data_hash": "e3b0c442...",
       "stored_by": "c4e1node2...",
-      ...
+      "stored_at": "1698800500000000000",
+      "batch_metadata": [...]
     }
   ]
 }
@@ -829,56 +869,23 @@ c4ed query wasm contract-state smart <contract_addr> '{
 }'
 ```
 
-### 5. Get User Profile
+### 5. Get Proofs by Worker DID
 
-Retrieves user information including their proof list.
-
-```json
-{
-  "user": {
-    "address": "c4e1homeowner..."
-  }
-}
-```
-
-**Response**:
-```json
-{
-  "address": "c4e1homeowner...",
-  "proofs": [42, 43, 44, 45],
-  "registered_at": "1698800400000000000"
-}
-```
-
-**Example**:
-```bash
-c4ed query wasm contract-state smart <contract_addr> '{
-  "user": {
-    "address": "c4e1homeowner..."
-  }
-}'
-```
-
-**Errors**:
-- `NotFound`: User not found (never had proofs stored)
-
-### 6. Get User Proofs
-
-Lists all proofs owned by a user with pagination.
+Retrieves all proofs submitted by a specific Worker Node DID.
 
 ```json
 {
-  "user_proofs": {
-    "address": "c4e1homeowner...",
-    "start_after": 42,
+  "proofs_by_worker": {
+    "worker_did": "did:c4e:worker:node123",
+    "start_after": 40,
     "limit": 10
   }
 }
 ```
 
 **Parameters**:
-- `address` (string): User address
-- `start_after` (optional, u64): Proof ID to start after
+- `worker_did` (string): W3C DID of the Worker Node
+- `start_after` (optional, u64): Proof ID to start after (for pagination)
 - `limit` (optional, u32): Maximum results (default: 10, max: 30)
 
 **Response**: Same format as List All Proofs
@@ -886,12 +893,49 @@ Lists all proofs owned by a user with pagination.
 **Example**:
 ```bash
 c4ed query wasm contract-state smart <contract_addr> '{
-  "user_proofs": {
-    "address": "c4e1homeowner...",
+  "proofs_by_worker": {
+    "worker_did": "did:c4e:worker:node123",
     "limit": 10
   }
 }'
 ```
+
+**Use Case**: Query all proofs stored by a specific Worker Node for auditing or performance analysis.
+
+### 6. Get Proofs by Gateway DID
+
+Retrieves all proofs that include batches from a specific Gateway DID.
+
+```json
+{
+  "proofs_by_gateway": {
+    "gateway_did": "did:c4e:gateway:gw001",
+    "start_after": 40,
+    "limit": 10
+  }
+}
+```
+
+**Parameters**:
+- `gateway_did` (string): W3C DID of the Gateway
+- `start_after` (optional, u64): Proof ID to start after (for pagination)
+- `limit` (optional, u32): Maximum results (default: 10, max: 30)
+
+**Response**: Same format as List All Proofs
+
+**Example**:
+```bash
+c4ed query wasm contract-state smart <contract_addr> '{
+  "proofs_by_gateway": {
+    "gateway_did": "did:c4e:gateway:gw001",
+    "limit": 10
+  }
+}'
+```
+
+**Use Case**: Track all proofs containing data from a specific Gateway, useful for Gateway monitoring and data provenance.
+
+**Note**: Uses the `GATEWAY_PROOFS` secondary index for efficient O(log n) queries.
 
 ### 7. Check if Node is Whitelisted
 

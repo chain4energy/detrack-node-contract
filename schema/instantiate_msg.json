@@ -13,8 +13,7 @@
     "min_stake_tier1",
     "min_stake_tier2",
     "min_stake_tier3",
-    "use_whitelist",
-    "version"
+    "use_whitelist"
   ],
   "properties": {
     "admin": {
@@ -58,9 +57,6 @@
     },
     "use_whitelist": {
       "type": "boolean"
-    },
-    "version": {
-      "type": "string"
     }
   },
   "additionalProperties": false,

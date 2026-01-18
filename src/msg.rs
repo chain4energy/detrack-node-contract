@@ -9,19 +9,20 @@ pub struct BatchInfo {
     pub batch_id: String,
     /// W3C DID of gateway that submitted this batch
     pub gateway_did: String,
-    /// Number of devices in this batch
-    pub device_count: u32,
     /// Total snapshots aggregated in this batch
     pub snapshot_count: u32,
     /// SHA-256 Merkle root of this batch
     pub batch_merkle_root: String,
+    /// Optional reference (e.g., IPFS CID, DB ID, or URI) to the original full data for this batch
+    pub original_data_reference: Option<String>,
+    /// Optional JSON string for additional, application-specific metadata related to the proof.
+    pub metadata_json: Option<String>,
 }
 
 /// Message type for `instantiate` entry_point
 #[cw_serde]
 pub struct InstantiateMsg {
     pub admin: Option<String>,
-    pub version: String,
     /// DID Contract address for identity verification
     pub did_contract_address: String,
     // Add tier and deposit parameters from previous discussion
@@ -77,6 +78,8 @@ pub enum NodeExecuteMsg {
         tw_end: Timestamp,
         /// Array of batch metadata (one entry per gateway batch)
         batch_metadata: Vec<BatchInfo>,
+        /// Optional reference (e.g., IPFS CID or URI) to the original full data used to generate the proof.
+        original_data_reference: Option<String>,
         /// Optional JSON metadata for additional information
         metadata_json: Option<String>,
     },
@@ -102,11 +105,9 @@ pub enum ExecuteMsg {
 }
 
 /// Message type for `migrate` entry_point
+/// Migrations are handled by cw2::set_contract_version
 #[cw_serde]
-pub enum MigrateMsg {
-    /// Migrate to new version
-    Migrate { new_version: String },
-}
+pub struct MigrateMsg {}
 
 /// Message type for `query` entry_point
 #[cw_serde]
@@ -153,7 +154,6 @@ pub enum QueryMsg {
 #[cw_serde]
 pub struct ConfigResponse {
     pub admin: String,
-    pub version: String,
     pub proof_count: u64,
     pub min_reputation_threshold: i32,
     pub treasury: Option<String>,
@@ -183,6 +183,8 @@ pub struct ProofResponse {
     pub tw_end: Timestamp,
     /// Array of batch metadata (multi-batch aggregation)
     pub batch_metadata: Vec<BatchInfo>,
+    /// Optional reference (e.g., IPFS CID or URI) to the original full data
+    pub original_data_reference: Option<String>,
     /// Optional JSON metadata
     pub metadata_json: Option<String>,
     /// Blockchain timestamp when proof was stored
